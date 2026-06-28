@@ -13,8 +13,9 @@ import streamlit as st
 
 # Sync Streamlit Cloud secrets into os.environ
 try:
-    for _k, _v in st.secrets.items():
-        os.environ[_k] = str(_v)
+    if len(st.secrets) > 0:
+        for _k, _v in st.secrets.items():
+            os.environ[_k] = str(_v)
 except Exception:
     pass
 
@@ -30,12 +31,6 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Temporary debug — remove after confirming keys work ──────────────────────
-with st.sidebar:
-    with st.expander("🔧 Debug (temp)", expanded=False):
-        st.write("ANTHROPIC_API_KEY set:", bool(os.getenv("ANTHROPIC_API_KEY")))
-        st.write("GOOGLE_API_KEY set:", bool(os.getenv("GOOGLE_API_KEY")))
-        st.write("st.secrets keys:", list(st.secrets.keys()) if st.secrets else "none")
 
 # ── Session state defaults ────────────────────────────────────────────────────
 
