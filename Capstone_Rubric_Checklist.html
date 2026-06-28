@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Capstone Rubric Checklist</title>
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #ffffff;
+    --navy: #1a2a4a;
+    --navy-mid: #2a3f6a;
+    --offset: #f0f4fa;
+    --border: #d0d8e8;
+    --text: #1a2a4a;
+    --muted: #6b7a99;
+    --accent: #e8edf5;
+    --warn: #92400e;
+    --warn-bg: #fef3c7;
+    --green: #166534;
+    --green-bg: #f0fdf4;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Lato', sans-serif;
+    padding: 2.5rem 1.5rem 4rem;
+    max-width: 760px;
+    margin: 0 auto;
+  }
+  .header {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.25rem;
+    border-bottom: 3px solid var(--navy);
+  }
+  .eyebrow {
+    font-size: 0.65rem; font-weight: 700; letter-spacing: 0.2em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 0.4rem;
+  }
+  h1 {
+    font-size: clamp(1.8rem, 4vw, 2.4rem); font-weight: 900;
+    color: var(--navy); line-height: 1.05; margin-bottom: 0.5rem;
+  }
+  .header-sub { font-size: 0.88rem; color: var(--muted); font-weight: 300; line-height: 1.5; }
+
+  .deadline-bar {
+    background: var(--navy); color: #fff; border-radius: 3px;
+    padding: 0.85rem 1.1rem; margin-bottom: 2rem;
+    display: flex; justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: 0.5rem;
+  }
+  .deadline-label { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.6; }
+  .deadline-date { font-size: 0.95rem; font-weight: 900; }
+
+  .section { margin-bottom: 2rem; }
+  .section-label {
+    background: var(--navy); color: #fff; padding: 0.65rem 1.1rem;
+    font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    border-radius: 3px 3px 0 0; display: flex; justify-content: space-between; align-items: center;
+  }
+  .section-label span { opacity: 0.55; font-weight: 400; font-size: 0.68rem; letter-spacing: 0.05em; }
+  .section-body { border: 1px solid var(--border); border-top: none; border-radius: 0 0 3px 3px; overflow: hidden; }
+
+  .check-item { display: flex; border-bottom: 1px solid var(--border); align-items: stretch; }
+  .check-item:last-child { border-bottom: none; }
+  .check-item:nth-child(even) { background: var(--offset); }
+  .check-box { width: 2.75rem; flex-shrink: 0; display: flex; align-items: flex-start; justify-content: center; padding-top: 1rem; border-right: 1px solid var(--border); }
+  .check-box input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--navy); cursor: pointer; }
+  .check-content { flex: 1; padding: 0.85rem 1.1rem; }
+  .check-label { font-weight: 700; font-size: 0.9rem; color: var(--navy); margin-bottom: 0.3rem; line-height: 1.3; }
+  .check-desc { font-size: 0.81rem; color: var(--text); line-height: 1.55; font-weight: 300; }
+  .pts-tag {
+    display: inline-block; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.06em;
+    background: var(--accent); color: var(--navy-mid); padding: 2px 7px; border-radius: 2px; margin-left: 0.5rem;
+  }
+  .status-note {
+    font-size: 0.76rem; color: var(--muted); font-style: italic; margin-top: 0.4rem;
+    padding-left: 0.6rem; border-left: 2px solid var(--border);
+  }
+
+  .callout {
+    border-radius: 3px; padding: 1rem 1.25rem; margin-bottom: 1.5rem;
+    display: flex; gap: 0.85rem; align-items: flex-start;
+  }
+  .callout-warn { background: var(--warn-bg); border: 1px solid #fcd34d; }
+  .callout-icon { font-size: 1.1rem; flex-shrink: 0; margin-top: 1px; }
+  .callout-text { font-size: 0.83rem; line-height: 1.6; color: var(--warn); }
+  .callout-text strong { font-weight: 700; }
+
+  .concept-grid { display: flex; flex-wrap: wrap; gap: 0.5rem; padding: 1.1rem 1.25rem; }
+  .concept-pill {
+    border: 1px solid var(--border); border-radius: 20px; padding: 0.4rem 0.9rem;
+    font-size: 0.78rem; font-weight: 700; color: var(--navy); display: flex; align-items: center; gap: 0.4rem;
+  }
+  .concept-pill input[type="checkbox"] { accent-color: var(--navy); cursor: pointer; }
+  .page-divider {
+    margin: 3rem 0 2rem; padding-top: 2rem; border-top: 4px double var(--navy);
+    text-align: center;
+  }
+  .page-divider-label {
+    font-size: 0.7rem; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--muted);
+  }
+  .page-divider h2 {
+    font-size: 1.6rem; font-weight: 900; color: var(--navy); margin-top: 0.4rem;
+  }
+  .term-status {
+    display: inline-block; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; padding: 2px 7px; border-radius: 2px; margin-left: 0.5rem;
+  }
+  .status-decided { background: var(--green-bg); color: var(--green); }
+  .status-open { background: var(--warn-bg); color: var(--warn); }
+  .criteria-list { list-style: none; margin-top: 0.6rem; padding-left: 0.9rem; border-left: 2px solid var(--border); }
+  .criteria-list li { font-size: 0.79rem; color: var(--text); font-weight: 300; line-height: 1.55; margin-bottom: 0.4rem; }
+  .criteria-list li:last-child { margin-bottom: 0; }
+  .criteria-list li strong { font-weight: 700; color: var(--navy); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="eyebrow">Kaggle × Google · AI Agents Capstone · Rubric Tracker</div>
+  <h1>Capstone Rubric Checklist</h1>
+  <p class="header-sub">Living checklist against the official evaluation rubric. Update as the project takes shape — this should always reflect current status, not a static plan.</p>
+</div>
+
+<div class="deadline-bar">
+  <div>
+    <div class="deadline-label">Submission Deadline</div>
+    <div class="deadline-date">July 6, 2026 · 11:59 PM PT</div>
+  </div>
+  <div>
+    <div class="deadline-label">Track</div>
+    <div class="deadline-date">Freestyle (tentative)</div>
+  </div>
+</div>
+
+<!-- KEY CONCEPTS -->
+<div class="section">
+  <div class="section-label">Key Concepts <span>Minimum 3 of 6 required</span></div>
+  <div class="section-body">
+    <div class="check-item">
+      <div class="check-box"><input type="checkbox" checked></div>
+      <div class="check-content">
+        <div class="check-label">Agent / Multi-agent system (ADK) <span class="pts-tag">Code</span></div>
+        <div class="check-desc">Demonstrated in the codebase itself — actual agent logic, not just a description of it.</div>
+      </div>
+    </div>
+    <div class="check-item">
+      <div class="check-box"><input type="checkbox" checked></div>
+      <div class="check-content">
+        <div class="check-label">MCP Server <span class="pts-tag">Code</span></div>
+        <div class="check-desc">Demonstrated in the codebase — a real MCP server implementation, tools defined and callable.</div>
+      </div>
+    </div>
+    <div class="check-item">
+      <div class="check-box"><input type="checkbox"></div>
+      <div class="check-content">
+        <div class="check-label">Antigravity <span class="pts-tag">Video</span></div>
+        <div class="check-desc">Demonstrated in the video — shown in use, not just mentioned.</div>
+      </div>
+    </div>
+    <div class="check-item">
+      <div class="check-box"><input type="checkbox"></div>
+      <div class="check-content">
+        <div class="check-label">Security features <span class="pts-tag">Code or Video</span></div>
+        <div class="check-desc">Either shown working in the video or visible/explained in the codebase.</div>
+      </div>
+    </div>
+    <div class="check-item">
+      <div class="check-box"><input type="checkbox" checked></div>
+      <div class="check-content">
+        <div class="check-label">Deployability <span class="pts-tag">Video</span></div>
+        <div class="check-desc">Demonstrated in the video — does not require an actual live deployment, but the path to one should be shown or described.</div>
+      </div>
+    </div>
+    <div class="check-item">
+      <div class="check-box"><input type="checkbox"></div>
+      <div class="check-content">
+        <div class="check-label">Agent Skills (e.g. Agents CLI) <span class="pts-tag">Code or Video</span></div>
+        <div class="check-desc">Either shown in the codebase or demonstrated in the video.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="callout callout-warn">
+  <div class="callout-icon">⚠️</div>
+  <div class="callout-text"><strong>Minimum 3 of 6 required.</strong> Pick your 3+ deliberately before building — this shapes what gets built, not retrofitted at the end.</div>
+</div>
+
+<!-- CATEGORY 1: PITCH -->
+<div class="section">
+  <div class="section-label">Category 1 — The Pitch <span>30 points</span></div>
+  <div class="section-body">
+    <div class="check-item">
+      <div class="check-box"><input type="checkbox"></div>
+      <div class="check-content">
+        <div class="check-label">Core Concept & Value <span class="pts-tag">10 pts</span></div>
+        <div class="check-desc">Central idea is clear, relevant to the track, and the use of agents is meaningful and central — not bolted on. Innovation and value are the two things being judged here.</div>
+      </div>
+    </div>
+    <div class="check-item">
+      <div class="check-box"><input type="checkbox"></div>
+      <div class="check-content">
+        <div class="check-label">YouTube Video Submission <span class="pts-tag">10 pts</span></div>
+        <div class="check-desc">5 minutes or less, published to YouTube. Should cover: problem statement, why agents specifically solve it, architecture (with images/diagram), a demo, and how it was built. Clarity and conciseness over completeness.</div>
+      </div>
+    </div>
+    <div class="check-item">
+      <div class="check-box"><input type="checkbox"></div>
+      <div class="check-content">
+        <div class="check-label">Writeup <span class="pts-tag">10 pts</span></div>
+        <div class="check-desc">How well the written submission articulates the problem, solution, architecture, and the project's journey. Max 2,500 words — over the limit risks penalty.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CATEGORY 2: IMPLEMENTATION -->
+<div class="section">
+  <div class="section-label">Category 2 — The Implementation <span>70 points</span></div>
+  <div class="section-body">
+    <div class="check-item">
+      <div class="check-box"><input type="checkbox"></div>
+      <div class="check-content">
+        <div class="check-label">Technical Implementation <span class="pts-tag">50 pts</span></div>
+        <div class="check-desc">Quality of architecture, code, and meaningful use of agents — including clever use of existing toolsets. Code should contain comments on implementation, design, and behavior. Live deployment not required, but if deployed, include reproduction docs.</div>
+        <div class="status-note">No API keys or passwords in code — explicit reminder in the rules.</div>
+      </div>
+    </div>
+    <div class="check-item">
+      <div class="check-box"><input type="checkbox"></div>
+      <div class="check-content">
+        <div class="check-label">Documentation <span class="pts-tag">20 pts</span></div>
+        <div class="check-desc">README.md explaining the problem, solution, architecture, setup instructions, and relevant diagrams/images where appropriate.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SUBMISSION REQUIREMENTS -->
+<div class="section">
+  <div class="section-label">Submission Requirements <span>All required to be valid</span></div>
+  <div class="section-body">
+    <div class="check-item">
+      <div class="check-box"><input type="checkbox"></div>
+      <div class="check-content">
+        <div class="check-label">Kaggle Writeup</div>
+        <div class="check-desc">Title, subtitle, detailed analysis. Track must be selected to submit. 2,500 word cap.</div>
+      </div>
+    </div>
+    <div class="check-item">
+      <div class="check-box"><input type="checkbox"></div>
+      <div class="check-content">
+        <div class="check-label">Media Gallery — Cover Image</div>
+        <div class="check-desc">Required to submit the Writeup at all.</div>
+      </div>
+    </div>
+    <div class="check-item">
+      <div class="check-box"><input type="checkbox"></div>
+      <div class="check-content">
+        <div class="check-label">Video (in Media Gallery)</div>
+        <div class="check-desc">5 minutes or less, published to YouTube, attached to the Writeup.</div>
+      </div>
+    </div>
+    <div class="check-item">
+      <div class="check-box"><input type="checkbox"></div>
+      <div class="check-content">
+        <div class="check-label">Public Project Link</div>
+        <div class="check-desc">Working product/demo URL, publicly accessible, no login/paywall. If no live demo, a public GitHub repo with detailed setup instructions is required instead.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PROJECT DECISIONS LOG -->
+<div class="section">
+  <div class="section-label">Project Decisions <span>Update as locked in</span></div>
+  <div class="section-body">
+    <div class="check-item">
+      <div class="check-box"><input type="checkbox"></div>
+      <div class="check-content">
+        <div class="check-label">Project concept finalized</div>
+        <div class="check-desc">Currently exploring: scouting tool concept.</div>
+      </div>
+    </div>
+    <div class="check-item">
+      <div class="check-box"><input type="checkbox"></div>
+      <div class="check-content">
+        <div class="check-label">Track finalized</div>
+        <div class="check-desc">Tentatively Freestyle — pending fit confirmation once concept is locked.</div>
+      </div>
+    </div>
+    <div class="check-item">
+      <div class="check-box"><input type="checkbox" checked></div>
+      <div class="check-content">
+        <div class="check-label">3+ key concepts deliberately selected</div>
+        <div class="check-desc">Locked in: Agent/Multi-agent system (ADK), MCP Server, Deployability. Minimum met.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-divider">
+  <div class="page-divider-label">Working Page 02</div>
+  <h2>Rating System & Vocabulary</h2>
+</div>
+
+<div class="section">
+  <div class="section-label">Core Terms <span>Defined while talking through Synthesis logic</span></div>
+  <div class="section-body">
+
+    <div class="check-item">
+      <div class="check-box"><input type="checkbox"></div>
+      <div class="check-content">
+        <div class="check-label">Talent Grade <span class="term-status status-decided">Decided</span></div>
+        <div class="check-desc">Production Agent's output. Independent of situation — purely "how good is this player." <strong>Hybrid scale:</strong> generated internally as a numeric score (0-100) with explicit calibration anchors in the prompt so the model actually uses the full range instead of clustering around 80. Converted to a letter grade (A-F, with +/-) for display in the final report.</div>
+        <ul class="criteria-list">
+          <li><strong>Production efficiency</strong> — yards/touch, target share, TD rate, completion % (position-dependent)</li>
+          <li><strong>Level of competition</strong> — conference strength, quality of opponents faced, not just raw stat totals</li>
+          <li><strong>Breakout age</strong> — how young they were when they became the clear top option on their own team; younger breakouts are more predictive than the same stats produced later</li>
+          <li><strong>Recruiting pedigree</strong> — ESPN recruiting rank/star rating as a long-range talent signal, independent of college production</li>
+          <li><strong>Athletic measurables</strong> — combine numbers if available, though not every prospect gets invited or tested</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="check-item">
+      <div class="check-box"><input type="checkbox"></div>
+      <div class="check-content">
+        <div class="check-label">Opportunity Grade <span class="term-status status-decided">Decided</span></div>
+        <div class="check-desc">Situation Agent's output. Independent of talent — purely "how good is the landing spot/depth chart." Same hybrid approach as Talent Grade — numeric (0-100) internally, letter grade for display.</div>
+        <ul class="criteria-list">
+          <li><strong>Draft capital</strong> — round/pick, as a proxy for organizational investment and expectation</li>
+          <li><strong>Current depth chart position</strong> — Sleeper's live data</li>
+          <li><strong>Positional competition</strong> — entrenched veteran ahead of them, or genuinely open competition</li>
+          <li><strong>Offensive scheme/volume</strong> — pass-heavy vs. run-heavy team, historical target/touch volume tendencies</li>
+          <li><strong>Coaching staff track record</strong> — history of playing/developing rookies at this position early</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="check-item">
+      <div class="check-box"><input type="checkbox"></div>
+      <div class="check-content">
+        <div class="check-label">Risk Modifier <span class="term-status status-decided">Decided</span></div>
+        <div class="check-desc">Output shape: a 1-5 durability score plus a chance-of-injury percentage — borrowing the presentation concept from Draft Sharks' injury guide, but computed internally from ESPN's <code>athletes/&#123;id&#125;/injuries</code> and Sleeper's live status fields rather than fetched from Draft Sharks directly. <strong>Why not fetch from Draft Sharks:</strong> their per-player injury pages have a soft usage cap (resets in incognito, suggesting client-side cookie tracking) — fine for casual browsing, but an agent evaluating a full 30+ prospect draft class in one session would hit that limit almost immediately, and building a tool that resets sessions to dodge it would mean circumventing a deliberate monetization mechanism rather than just using free public content. ESPN/Sleeper have no such cap.</div>
+        <ul class="criteria-list">
+          <li><strong>Injury frequency</strong> — number of distinct incidents, not just total games missed</li>
+          <li><strong>Severity</strong> — soft tissue (lower concern) vs. structural/surgical (higher concern)</li>
+          <li><strong>Recency</strong> — a recent injury weighs differently than something from two years ago</li>
+          <li><strong>Position-specific baseline risk</strong> — some positions carry higher inherent injury rates regardless of individual history</li>
+        </ul>
+        <div class="status-note">Exact formula combining these four criteria into the 1-5 score is still part of the broader Composite Logic weighting work below — shape and source are locked, internal math isn't yet.</div>
+      </div>
+    </div>
+
+    <div class="check-item">
+      <div class="check-box"><input type="checkbox"></div>
+      <div class="check-content">
+        <div class="check-label">Crowd Sentiment Signal <span class="term-status status-decided">Decided</span></div>
+        <div class="check-desc">Derived from Sleeper's trending add/drop data. <strong>Resolved as relative ranking, not absolute threshold:</strong> rookies are ranked against each other's activity levels at the same point in time, not against a fixed "high vs. low" cutoff. A player absent from the trending list isn't treated as inherently low-interest — overall platform activity is seasonal (e.g. a typical offseason lull means uniformly low volume across the board), so absence can just reflect timing, not disinterest. Standing out during a quiet period is actually a stronger signal than standing out during a high-volume spike (e.g. right after the actual NFL draft).</div>
+        <ul class="criteria-list">
+          <li><strong>Rank within the current draft class</strong> — relative to other rookies being evaluated right now, not an absolute count threshold</li>
+          <li><strong>Net direction</strong> — trending up vs. down over the recent window, not just a snapshot</li>
+          <li><strong>Position-relative context</strong> — what's "high" for a TE is different from what's "high" for a WR</li>
+          <li><strong>Seasonal awareness caveat</strong> — agent should note when overall platform activity is low league-wide, so sentiment reads as directional color rather than a decisive factor</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="check-item">
+      <div class="check-box"><input type="checkbox"></div>
+      <div class="check-content">
+        <div class="check-label">Composite Score / Recommendation Logic <span class="term-status status-decided">Base weighting decided</span></div>
+        <div class="check-desc">The rule Synthesis uses to turn Talent + Opportunity + Risk + Sentiment into a round.pick recommendation. <strong>Base weighting locked:</strong> Talent 43% / Opportunity 38% / Risk 15% / Sentiment 4%. Market Consensus (KTC) deliberately excluded from this formula — stays a comparison-only step, not an input (see below). Risk and Sentiment kept intentionally small as modifiers rather than primary drivers; the freed-up weight from removing Market Consensus went to Talent and Opportunity proportionally, preserving that intent.</div>
+        <ul class="criteria-list">
+          <li><strong>Position-specific weighting</strong> — <em>Decided: stays uniform.</em> Same Talent 43 / Opportunity 38 / Risk 15 / Sentiment 4 weighting applies across all positions, no per-position flexing. Simpler, defensible design choice.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="check-item">
+      <div class="check-box"><input type="checkbox" checked></div>
+      <div class="check-content">
+        <div class="check-label">Market Consensus Comparison (KeepTradeCut) <span class="term-status status-decided">Decided</span></div>
+        <div class="check-desc">A separate, final step — not an input to the Composite Logic above. Synthesis reaches its own conclusion first from independently-built reasoning, then checks it against KTC's crowdsourced dynasty value as a sanity check, explicitly surfacing agreement or the specific reason behind any divergence. Keeps the agent's reasoning genuinely independent rather than just echoing market consensus.</div>
+        <div class="status-note">Open: does KTC have a documented public API, or does this require fetching/parsing the rendered page? Needs the same diligence as the ESPN endpoint research before building.</div>
+      </div>
+    </div>
+
+    <div class="check-item">
+      <div class="check-box"><input type="checkbox"></div>
+      <div class="check-content">
+        <div class="check-label">Confidence / Conviction Level <span class="term-status status-open">Tag format TBD</span></div>
+        <div class="check-desc">Decoupled from the pick number itself (see Output Format Decision below) — a separate, optional tag or one-line note for the rare genuinely thin-data prospect, rather than a modifier that widens or narrows the recommended pick.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Output Format Decision <span>Resolves conflict-handling + output-format together</span></div>
+  <div class="section-body">
+
+    <div class="check-item">
+      <div class="check-box"><input type="checkbox" checked></div>
+      <div class="check-content">
+        <div class="check-label">Floor / Ceiling range, not a single blended number <span class="term-status status-decided">Decided</span></div>
+        <div class="check-desc">Talent and Opportunity Grades are NOT collapsed into one score. Instead: Floor = pick if situation doesn't improve, Ceiling = pick if talent wins out, Recommended = the actual call between them. The tension between the two grades becomes the explanation for the range, not a problem to hide.</div>
+        <div class="status-note">Updated shape: "Talent: A- / Opportunity: C+ → Floor: 4.02, Ceiling: 1.08 → Recommended: 2.11"</div>
+      </div>
+    </div>
+
+    <div class="check-item">
+      <div class="check-box"><input type="checkbox" checked></div>
+      <div class="check-content">
+        <div class="check-label">League format locked <span class="term-status status-decided">Decided</span></div>
+        <div class="check-desc">4 rounds, 12 picks per round — 48 total picks. Recommendation output uses round.pick notation (e.g. "4.04").</div>
+      </div>
+    </div>
+
+    <div class="check-item">
+      <div class="check-box"><input type="checkbox" checked></div>
+      <div class="check-content">
+        <div class="check-label">Pick-level precision vs. confidence-scaled range <span class="term-status status-decided">Decided</span></div>
+        <div class="check-desc">Resolved: the pick number is always a single, precise estimate — no range-widening based on confidence. By late June, even small-school prospects have real draft outcomes, write-ups, and spring practice reports, so thin-data cases are rare at this point in the calendar (mostly a pre-draft concern, not now). The exact pick functions as a relative positioning signal, not a literal "draft here" instruction — same way ADP gets used in practice.</div>
+      </div>
+    </div>
+
+    <div class="check-item">
+      <div class="check-box"><input type="checkbox"></div>
+      <div class="check-content">
+        <div class="check-label">Confidence / Conviction Level — now a separate tag, not a range modifier <span class="term-status status-open">Format TBD</span></div>
+        <div class="check-desc">Decoupled from the pick number itself. Shown as its own short field alongside the recommendation (e.g. a tag or one-line note) for the rare genuinely thin-data case, rather than changing the pick or widening it into a range.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

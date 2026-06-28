@@ -1,0 +1,5 @@
+google-adk[extensions]
+anthropic
+httpx
+python-dotenv
+streamlit

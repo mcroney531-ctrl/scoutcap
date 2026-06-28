@@ -1,0 +1,305 @@
+"""
+Rookie Draft Scouting Agent — Streamlit frontend
+"""
+
+import os, sys, asyncio, json
+sys.path.insert(0, os.path.dirname(__file__))
+
+import streamlit as st
+from dotenv import load_dotenv
+load_dotenv()
+
+# On Streamlit Cloud, secrets live in st.secrets — sync them into os.environ
+# so all downstream code using os.getenv() works without changes
+try:
+    import streamlit as _st
+    for _k, _v in _st.secrets.items():
+        if _k not in os.environ:
+            os.environ[_k] = str(_v)
+except Exception:
+    pass
+
+from tools.sleeper import get_nfl_players, get_user, get_rosters
+from agents.synthesis_agent import run_synthesis_agent
+
+# ── Page config ───────────────────────────────────────────────────────────────
+
+st.set_page_config(
+    page_title="Rookie Scout",
+    page_icon="🏈",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# ── Session state defaults ────────────────────────────────────────────────────
+
+if "shortlist" not in st.session_state:
+    st.session_state.shortlist = []
+if "selected_player" not in st.session_state:
+    st.session_state.selected_player = None
+if "analysis_cache" not in st.session_state:
+    st.session_state.analysis_cache = {}
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = {}
+
+# ── Data loading ──────────────────────────────────────────────────────────────
+
+
+@st.cache_data(ttl=3600, show_spinner="Loading rookie draft board...")
+def load_rookies():
+    players = get_nfl_players()
+    rookies = [
+        {
+            "player_id": pid,
+            "full_name": p.get("full_name", "Unknown"),
+            "position": p.get("position"),
+            "team": p.get("team") or "FA",
+            "search_rank": p.get("search_rank") or 9999999,
+            "depth_chart_order": p.get("depth_chart_order"),
+            "status": p.get("status", ""),
+            "college": p.get("college", ""),
+        }
+        for pid, p in players.items()
+        if p.get("years_exp") == 0
+        and p.get("active")
+        and p.get("position") in ("QB", "RB", "WR", "TE")
+    ]
+    rookies.sort(key=lambda p: p["search_rank"])
+    return rookies
+
+# ── Sidebar — draft board ─────────────────────────────────────────────────────
+
+with st.sidebar:
+    st.markdown("## 🏈 2026 Rookie Draft Board")
+
+    rookies = load_rookies()
+
+    # Position filter
+    pos_filter = st.multiselect(
+        "Position",
+        ["QB", "RB", "WR", "TE"],
+        default=["QB", "RB", "WR", "TE"],
+        label_visibility="collapsed",
+    )
+
+    # Search
+    search = st.text_input("Search players", placeholder="e.g. Jeremiyah Love", label_visibility="collapsed")
+
+    filtered = [
+        r for r in rookies
+        if r["position"] in pos_filter
+        and (not search or search.lower() in r["full_name"].lower())
+    ]
+
+    st.caption(f"{len(filtered)} prospects • click to scout")
+    st.divider()
+
+    # Shortlist section
+    if st.session_state.shortlist:
+        with st.expander(f"⭐ My Shortlist ({len(st.session_state.shortlist)})", expanded=False):
+            for pid in list(st.session_state.shortlist):
+                match = next((r for r in rookies if r["player_id"] == pid), None)
+                if match:
+                    col1, col2 = st.columns([4, 1])
+                    with col1:
+                        if st.button(match["full_name"], key=f"sl_{pid}", use_container_width=True):
+                            st.session_state.selected_player = match
+                    with col2:
+                        if st.button("✕", key=f"rm_{pid}"):
+                            st.session_state.shortlist.remove(pid)
+                            st.rerun()
+        st.divider()
+
+    # Draft board list
+    for r in filtered[:75]:
+        pos_colors = {"QB": "🟦", "RB": "🟩", "WR": "🟨", "TE": "🟧"}
+        icon = pos_colors.get(r["position"], "⬜")
+        label = f"{icon} {r['full_name']} · {r['position']} · {r['team']}"
+
+        if st.button(label, key=f"board_{r['player_id']}", use_container_width=True):
+            st.session_state.selected_player = r
+            st.rerun()
+
+# ── Main panel ────────────────────────────────────────────────────────────────
+
+if st.session_state.selected_player is None:
+    st.markdown("## Rookie Draft Scout")
+    st.markdown(
+        "Select a prospect from the draft board to run a full scouting report.\n\n"
+        "The three-agent pipeline evaluates **Talent**, **Opportunity**, and **Risk** "
+        "independently, then combines them into a dynasty draft recommendation."
+    )
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.info("**Situation Agent**\nDepth chart + draft capital → Opportunity Grade")
+    with col2:
+        st.info("**Production Agent**\nCollege stats + injury history → Talent Grade + Risk")
+    with col3:
+        st.info("**Synthesis Agent**\nOrchestrates both + roster need + sentiment → Pick recommendation")
+    st.stop()
+
+player = st.session_state.selected_player
+pid = player["player_id"]
+name = player["full_name"]
+
+# ── Player header ─────────────────────────────────────────────────────────────
+
+col_name, col_add = st.columns([5, 1])
+with col_name:
+    st.markdown(f"## {name}")
+    st.caption(f"{player['position']} · {player['team']} · {player['college']}")
+with col_add:
+    if pid not in st.session_state.shortlist:
+        if st.button("⭐ Add to shortlist"):
+            st.session_state.shortlist.append(pid)
+            st.rerun()
+    else:
+        st.success("On shortlist")
+
+st.divider()
+
+# ── Analysis card ─────────────────────────────────────────────────────────────
+
+# Run analysis if not cached
+if pid not in st.session_state.analysis_cache:
+    progress = st.empty()
+    steps = [
+        "🔍 Situation Agent: evaluating landing spot and depth chart...",
+        "📊 Production Agent: analyzing college stats and injury history...",
+        "🧠 Synthesis Agent: combining signals and computing recommendation...",
+    ]
+    for step in steps:
+        progress.info(step)
+    try:
+        result = asyncio.run(run_synthesis_agent(name))
+        st.session_state.analysis_cache[pid] = result
+        if pid not in st.session_state.chat_history:
+            st.session_state.chat_history[pid] = []
+        progress.empty()
+    except Exception as e:
+        progress.empty()
+        st.error(f"Pipeline error: {e}")
+        st.stop()
+
+analysis = st.session_state.analysis_cache.get(pid, {})
+
+if "raw_output" in analysis:
+    st.warning("Agent returned unstructured output:")
+    st.text(analysis["raw_output"])
+else:
+    # Collapsible analysis card
+    headline = analysis.get("headline", "")
+    talent_g = analysis.get("talent_grade", "—")
+    opp_g = analysis.get("opportunity_grade", "—")
+    rec = analysis.get("recommended_pick", "—")
+    floor_p = analysis.get("floor_pick", "—")
+    ceil_p = analysis.get("ceiling_pick", "—")
+    composite = analysis.get("composite_score", "—")
+    roster_need = analysis.get("roster_need", "—")
+
+    with st.expander("📋 Scouting Report", expanded=True):
+        # Grade row
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Talent Grade", talent_g, f"Score: {analysis.get('talent_score', '—')}")
+        c2.metric("Opportunity Grade", opp_g, f"Score: {analysis.get('opportunity_score', '—')}")
+        c3.metric("Composite Score", composite)
+        c4.metric("Roster Need", roster_need)
+
+        st.divider()
+
+        # Pick recommendation
+        pc1, pc2, pc3 = st.columns(3)
+        pc1.metric("🎯 Recommended Pick", rec)
+        pc2.metric("📈 Ceiling", ceil_p)
+        pc3.metric("📉 Floor", floor_p)
+
+        st.divider()
+
+        # Risk modifier
+        risk = analysis.get("risk_modifier", {})
+        dur = risk.get("durability_score", "—")
+        inj_pct = risk.get("injury_chance_pct", "—")
+        st.markdown(f"**Risk Modifier:** Durability {dur}/5 · Injury chance {inj_pct}%")
+        if risk.get("injury_notes"):
+            st.caption(risk["injury_notes"])
+
+        st.divider()
+
+        # Narrative
+        st.markdown("**Analysis**")
+        st.markdown(analysis.get("narrative", ""))
+
+        # Sentiment
+        sent = analysis.get("sentiment", {})
+        rank = sent.get("rank_in_class")
+        activity = sent.get("activity_level", "")
+        if rank:
+            st.caption(f"📊 Sentiment: #{rank} in rookie class trending adds ({activity} activity period)")
+        else:
+            st.caption(f"📊 Sentiment: Not in current trending ({activity} activity — treat as neutral)")
+
+        st.divider()
+
+        # Key upside / risks
+        up_col, risk_col = st.columns(2)
+        with up_col:
+            st.markdown("**Key Upside**")
+            for item in analysis.get("key_upside", []):
+                st.markdown(f"✅ {item}")
+        with risk_col:
+            st.markdown("**Key Risks**")
+            for item in analysis.get("key_risks", []):
+                st.markdown(f"⚠️ {item}")
+
+        st.divider()
+        st.caption(f"**KTC Comparison:** {analysis.get('ktc_comparison', '—')}")
+        st.caption(f"**Roster Note:** {analysis.get('roster_need_note', '—')}")
+
+# ── Chat thread ───────────────────────────────────────────────────────────────
+
+st.markdown("### 💬 Ask a follow-up")
+
+chat_history = st.session_state.chat_history.get(pid, [])
+
+# Display prior messages
+for msg in chat_history:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+
+# Chat input
+if prompt := st.chat_input(f"Ask anything about {name}..."):
+    chat_history.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    with st.chat_message("assistant"):
+        with st.spinner("Thinking..."):
+            import anthropic
+            client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+            context = f"""You are a dynasty fantasy football analyst assistant.
+You have just completed a scouting report for {name}. Here is the full analysis:
+
+{json.dumps(analysis, indent=2)}
+
+Answer the user's follow-up question concisely and specifically, referencing the data above where relevant.
+Keep responses to 2-4 sentences unless a longer answer is clearly needed."""
+
+            messages = [{"role": "user", "content": context + "\n\nUser question: " + prompt}]
+            for prev in chat_history[:-1]:
+                messages.append({"role": prev["role"], "content": prev["content"]})
+            messages.append({"role": "user", "content": prompt})
+
+            response = client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=512,
+                system=context,
+                messages=[{"role": m["role"], "content": m["content"]} for m in chat_history],
+            )
+            reply = response.content[0].text
+
+        st.markdown(reply)
+
+    chat_history.append({"role": "assistant", "content": reply})
+    st.session_state.chat_history[pid] = chat_history
