@@ -330,13 +330,6 @@ with st.sidebar:
 
     st.toggle("☀️ Light mode", key="ui_light_mode", help="Switch between the navy dark theme and a light theme")
 
-    # API key diagnostic — remove once confirmed working
-    _api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if _api_key:
-        st.caption(f"🔑 API key loaded ({_api_key[:4]}...{_api_key[-4:]})")
-    else:
-        st.error(f"❌ ANTHROPIC_API_KEY missing. Secrets errors: {_secret_errors}")
-
     rookies = load_rookies()
 
     # Position filter
