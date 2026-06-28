@@ -19,6 +19,7 @@ from google.genai import types as genai_types
 
 from tools.sleeper import search_players, get_nfl_players, get_trending
 from tools.espn import search_draft_prospects
+from tools.fantasycalc import get_player_value, value_grade
 
 # ── ADK tool functions ────────────────────────────────────────────────────────
 
@@ -91,6 +92,74 @@ def get_position_depth(team: str, position: str) -> dict:
     return {"team": team, "position": position, "depth_chart": depth}
 
 
+def assess_veteran_competition(team: str, position: str) -> dict:
+    """
+    Grade the QUALITY of veteran competition at a team+position, not just the count.
+
+    Bodies ahead of a rookie are not equal. Three replaceable veterans (all grade D/F)
+    is a soft depth chart and a PLUS for the rookie; a single grade A or B veteran is a
+    real block. Competitors are graded by FantasyCalc value — redraft value drives the
+    near-term grade (who actually eats snaps now), with dynasty value shown for context
+    (an aging vet can have low dynasty value but still block snaps short-term).
+
+    team: NFL team abbreviation (e.g. 'WAS', 'TEN')
+    position: 'QB', 'RB', 'WR', or 'TE'
+    Returns each veteran with a grade plus a summary of how strong the room is.
+    """
+    all_players = get_nfl_players()
+    competitors = []
+    for pid, p in all_players.items():
+        if (p.get("team") == team
+                and p.get("position") == position
+                and (p.get("years_exp") or 0) > 0):  # veterans only
+            v = get_player_value(pid)
+            if v:
+                grade = value_grade(position, v.get("redraft_pos_rank"))
+                competitors.append({
+                    "name": p.get("full_name"),
+                    "years_exp": p.get("years_exp"),
+                    "age": p.get("age"),
+                    "grade": grade,
+                    "dynasty_value": v.get("dynasty_value"),
+                    "redraft_value": v.get("redraft_value"),
+                    "redraft_pos_rank": v.get("redraft_pos_rank"),
+                })
+            else:
+                # Outside FantasyCalc's dynasty-relevant pool → replaceable
+                competitors.append({
+                    "name": p.get("full_name"),
+                    "years_exp": p.get("years_exp"),
+                    "age": p.get("age"),
+                    "grade": "F",
+                    "dynasty_value": 0,
+                    "redraft_value": 0,
+                    "note": "outside FantasyCalc top ~460 — replaceable depth",
+                })
+
+    competitors.sort(key=lambda c: c.get("redraft_value") or 0, reverse=True)
+
+    grade_counts = {g: sum(1 for c in competitors if c["grade"] == g) for g in ["A", "B", "C", "D", "F"]}
+    grade_order = ["A", "B", "C", "D", "F"]
+    strongest = next((g for g in grade_order if grade_counts[g] > 0), None)
+
+    if strongest in ("A", "B"):
+        room_strength = "strong — at least one entrenched starter-quality veteran blocks the path"
+    elif strongest == "C":
+        room_strength = "moderate — a flex-level veteran to beat out, but no entrenched star"
+    else:
+        room_strength = "soft — only replaceable depth (grade D/F) ahead, a clear plus for a talented rookie"
+
+    return {
+        "team": team,
+        "position": position,
+        "veteran_count": len(competitors),
+        "grade_counts": grade_counts,
+        "strongest_competitor_grade": strongest,
+        "room_strength": room_strength,
+        "competitors": competitors,
+    }
+
+
 def get_trending_sentiment(limit: int = 50) -> dict:
     """
     Return trending add data from Sleeper for the current draft class context.
@@ -142,13 +211,24 @@ Tools available:
 - lookup_player_opportunity: Get Sleeper depth chart data for the player
 - lookup_draft_capital: Get ESPN draft round/pick and scout grades
 - get_position_depth: See the full depth chart at their position on their team
+- assess_veteran_competition: Grade the QUALITY of the veterans ahead (FantasyCalc values)
 - get_trending_sentiment: Optional — Sleeper trending adds for context
+
+CRITICAL — competition is about QUALITY, not headcount. Do NOT simply penalize a rookie
+for having bodies ahead of them. Use assess_veteran_competition to grade those veterans:
+- A depth chart of only grade D/F veterans (e.g. replaceable journeymen) is a SOFT room and
+  a PLUS — a talented rookie can leapfrog them. Reflect this as a HIGHER opportunity grade.
+- A single grade A or B veteran (entrenched starter) is a genuine block — LOWER the grade.
+- An aging veteran can have low dynasty value but still block snaps near-term; weigh that.
+Always state the competition explicitly, e.g. "3 WRs ahead but all grade D/F → soft room."
 
 Steps:
 1. Call lookup_player_opportunity to get depth chart and team
 2. Call lookup_draft_capital to get draft round/pick
-3. Call get_position_depth to assess depth chart crowding
-4. Synthesize into an Opportunity Grade (numeric 0-100, then letter)
+3. Call get_position_depth to see the depth chart ordering
+4. Call assess_veteran_competition to grade the quality of the veterans ahead
+5. Synthesize into an Opportunity Grade (numeric 0-100, then letter), explicitly weighing
+   competition QUALITY over raw count
 
 Output format — always return a JSON object with these exact keys:
 {{
@@ -160,6 +240,12 @@ Output format — always return a JSON object with these exact keys:
   "depth_chart_order": 1,
   "opportunity_score": 82,
   "opportunity_grade": "B",
+  "competition": {{
+    "veteran_count": 3,
+    "strongest_competitor_grade": "D",
+    "room_strength": "soft — only replaceable depth ahead",
+    "summary": "3 WRs ahead but all grade D/F — soft room a talented rookie can leapfrog"
+  }},
   "key_factors": ["WR1 on depth chart", "pass-heavy offense", "crowded room — 2 other WRs drafted"],
   "concerns": ["offensive line uncertainty may limit explosive plays"],
   "summary": "Two-sentence plain-English summary of opportunity outlook."
@@ -177,6 +263,7 @@ def build_situation_agent() -> LlmAgent:
             lookup_player_opportunity,
             lookup_draft_capital,
             get_position_depth,
+            assess_veteran_competition,
             get_trending_sentiment,
         ],
     )
