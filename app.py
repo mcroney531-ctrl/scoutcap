@@ -11,23 +11,6 @@ load_dotenv()
 
 import streamlit as st
 
-# Pull each secret explicitly by name into os.environ
-for _secret_key in ["ANTHROPIC_API_KEY", "GOOGLE_API_KEY", "SLEEPER_USERNAME", "SLEEPER_LEAGUE_ID"]:
-    try:
-        os.environ[_secret_key] = st.secrets[_secret_key]
-    except Exception:
-        pass
-
-# Belt-and-suspenders: set LiteLLM's global anthropic key directly
-try:
-    import litellm
-    litellm.anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
-except Exception:
-    pass
-
-from tools.sleeper import get_nfl_players, get_user, get_rosters
-from agents.synthesis_agent import run_synthesis_agent
-
 # ── Page config ───────────────────────────────────────────────────────────────
 
 st.set_page_config(
@@ -37,6 +20,25 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# ── Secrets sync (must run after set_page_config so Streamlit runtime is ready) ──
+
+def _init_secrets():
+    for _key in ["ANTHROPIC_API_KEY", "GOOGLE_API_KEY", "SLEEPER_USERNAME", "SLEEPER_LEAGUE_ID"]:
+        try:
+            val = st.secrets[_key]
+            os.environ[_key] = val
+        except Exception:
+            pass
+    try:
+        import litellm
+        litellm.anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    except Exception:
+        pass
+
+_init_secrets()
+
+from tools.sleeper import get_nfl_players, get_user, get_rosters
+from agents.synthesis_agent import run_synthesis_agent
 
 # ── Session state defaults ────────────────────────────────────────────────────
 
