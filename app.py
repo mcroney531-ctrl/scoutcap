@@ -5,20 +5,18 @@ Rookie Draft Scouting Agent — Streamlit frontend
 import os, sys, asyncio, json
 sys.path.insert(0, os.path.dirname(__file__))
 
-# Sync Streamlit Cloud secrets into os.environ BEFORE any other imports
-# so LiteLLM and anthropic SDK pick them up at load time
-try:
-    import streamlit as _st_early
-    for _k, _v in _st_early.secrets.items():
-        os.environ[_k] = str(_v)
-except Exception:
-    pass
-
 # Fall back to .env for local dev
 from dotenv import load_dotenv
 load_dotenv()
 
 import streamlit as st
+
+# Sync Streamlit Cloud secrets into os.environ
+try:
+    for _k, _v in st.secrets.items():
+        os.environ[_k] = str(_v)
+except Exception:
+    pass
 
 from tools.sleeper import get_nfl_players, get_user, get_rosters
 from agents.synthesis_agent import run_synthesis_agent
@@ -31,6 +29,13 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+# ── Temporary debug — remove after confirming keys work ──────────────────────
+with st.sidebar:
+    with st.expander("🔧 Debug (temp)", expanded=False):
+        st.write("ANTHROPIC_API_KEY set:", bool(os.getenv("ANTHROPIC_API_KEY")))
+        st.write("GOOGLE_API_KEY set:", bool(os.getenv("GOOGLE_API_KEY")))
+        st.write("st.secrets keys:", list(st.secrets.keys()) if st.secrets else "none")
 
 # ── Session state defaults ────────────────────────────────────────────────────
 
