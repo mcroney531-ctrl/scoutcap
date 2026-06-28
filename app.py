@@ -44,36 +44,76 @@ _secret_errors = _init_secrets()
 
 # ── Theme / custom CSS ────────────────────────────────────────────────────────
 
-GOLD = "#e8b84b"
-GOLD_DIM = "#b8902f"
-INK = "#0f1419"
-PANEL = "#1a2029"
-PANEL_2 = "#222b36"
-TEXT = "#e6e9ef"
-MUTED = "#8b97a8"
+NAVY = "#212F52"  # brand primary
+
+PALETTES = {
+    "dark": {
+        "app_bg": "#0d1322",
+        "sidebar_bg": "#0a0f1c",
+        "panel": NAVY,
+        "panel_2": "#2c3b66",
+        "text": "#e9edf5",
+        "muted": "#9aa6bb",
+        "accent": "#e8b84b",       # gold highlight line
+        "border": "rgba(255,255,255,0.08)",
+        "metric_value": "#e8b84b",
+        "grade_c": "#e8b84b",
+    },
+    "light": {
+        "app_bg": "#f4f6fa",
+        "sidebar_bg": "#eaeef5",
+        "panel": "#ffffff",
+        "panel_2": "#eef1f6",
+        "text": "#1b2233",
+        "muted": "#5a6678",
+        "accent": NAVY,            # navy becomes the accent in light mode
+        "border": "rgba(33,47,82,0.15)",
+        "metric_value": NAVY,
+        "grade_c": "#b8902f",      # darker gold for contrast on white
+    },
+}
+
+_light = st.session_state.get("ui_light_mode", False)
+P = PALETTES["light"] if _light else PALETTES["dark"]
 
 st.markdown(
     f"""
     <style>
-      /* Tighten top padding so the brand bar sits high */
+      /* Base surfaces (override config.toml so the toggle can flip the theme) */
+      .stApp, [data-testid="stAppViewContainer"] {{
+        background-color: {P['app_bg']}; color: {P['text']};
+      }}
+      [data-testid="stHeader"] {{ background: transparent; }}
+      section[data-testid="stSidebar"] {{ background-color: {P['sidebar_bg']}; }}
+      .stApp p, .stApp label, .stApp li,
+      .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp span,
+      [data-testid="stMarkdownContainer"] {{ color: {P['text']}; }}
+      .stApp [data-testid="stCaptionContainer"], .stApp small {{ color: {P['muted']} !important; }}
+
+      /* Inputs */
+      .stApp input, .stApp textarea,
+      .stApp [data-baseweb="input"], .stApp [data-baseweb="select"] > div {{
+        background-color: {P['panel']} !important; color: {P['text']} !important;
+      }}
+
       .block-container {{ padding-top: 2.2rem; }}
 
-      /* Brand bar */
+      /* Brand bar — always navy gradient in both modes, light text inside */
       .brand-bar {{
         display: flex; align-items: center; gap: 0.75rem;
         padding: 0.9rem 1.25rem; margin-bottom: 1.2rem;
-        background: linear-gradient(135deg, {PANEL} 0%, {INK} 100%);
+        background: linear-gradient(135deg, {NAVY} 0%, #16203b 100%);
         border: 1px solid rgba(232,184,75,0.25);
-        border-left: 4px solid {GOLD};
+        border-left: 4px solid {P['accent']};
         border-radius: 10px;
       }}
       .brand-mark {{ font-size: 1.7rem; line-height: 1; }}
       .brand-title {{
         font-size: 1.35rem; font-weight: 800; letter-spacing: -0.01em;
-        color: {TEXT}; margin: 0;
+        color: #f3f5fa !important; margin: 0;
       }}
-      .brand-title .accent {{ color: {GOLD}; }}
-      .brand-sub {{ font-size: 0.8rem; color: {MUTED}; margin: 0.1rem 0 0 0; }}
+      .brand-title .accent {{ color: #e8b84b !important; }}
+      .brand-sub {{ font-size: 0.8rem; color: #aeb8cc !important; margin: 0.1rem 0 0 0; }}
 
       /* Grade badge pills */
       .grade-pill {{
@@ -81,26 +121,27 @@ st.markdown(
         font-weight: 800; font-size: 0.95rem; letter-spacing: 0.02em;
       }}
 
-      /* Sidebar draft-board buttons: left-align, compact */
+      /* Sidebar draft-board buttons */
       section[data-testid="stSidebar"] .stButton > button {{
         text-align: left; justify-content: flex-start;
         font-size: 0.86rem; padding: 0.32rem 0.6rem;
-        border: 1px solid rgba(255,255,255,0.06);
-        background: {PANEL};
+        border: 1px solid {P['border']};
+        background: {P['panel']}; color: {P['text']};
       }}
       section[data-testid="stSidebar"] .stButton > button:hover {{
-        border-color: {GOLD}; color: {GOLD}; background: {PANEL_2};
+        border-color: {P['accent']}; color: {P['accent']}; background: {P['panel_2']};
       }}
 
       /* Metric cards */
       div[data-testid="stMetric"] {{
-        background: {PANEL}; border: 1px solid rgba(255,255,255,0.06);
+        background: {P['panel']}; border: 1px solid {P['border']};
         border-radius: 10px; padding: 0.7rem 0.9rem;
       }}
-      div[data-testid="stMetricValue"] {{ color: {GOLD}; }}
+      div[data-testid="stMetricValue"] {{ color: {P['metric_value']}; }}
 
-      /* Expander header */
+      /* Expander */
       details summary {{ font-weight: 700; }}
+      div[data-testid="stExpander"] {{ border-color: {P['border']}; }}
     </style>
     """,
     unsafe_allow_html=True,
@@ -110,15 +151,15 @@ st.markdown(
 def grade_color(grade: str) -> str:
     """Map a letter grade to a color for badge tinting."""
     if not grade or grade == "—":
-        return MUTED
+        return P["muted"]
     g = grade[0].upper()
     return {
         "A": "#3fb950",   # green
-        "B": "#58a6ff",   # blue
-        "C": GOLD,        # gold
+        "B": "#3b82f6" if _light else "#58a6ff",  # blue
+        "C": P["grade_c"],
         "D": "#e3873c",   # orange
         "F": "#f85149",   # red
-    }.get(g, MUTED)
+    }.get(g, P["muted"])
 
 
 def grade_pill(grade: str) -> str:
@@ -189,6 +230,8 @@ def load_rookies():
 
 with st.sidebar:
     st.markdown("## 🏈 2026 Rookie Draft Board")
+
+    st.toggle("☀️ Light mode", key="ui_light_mode", help="Switch between the navy dark theme and a light theme")
 
     # API key diagnostic — remove once confirmed working
     _api_key = os.environ.get("ANTHROPIC_API_KEY", "")
