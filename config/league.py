@@ -25,6 +25,14 @@ WEIGHTS = {
     "sentiment": 0.04,
 }
 
-# Roster need priority order — positions where depth is thinnest matter most
-# This is computed live from Sleeper, but positional value tiebreaker is here
-POSITION_VALUE = {"QB": 1.15, "RB": 1.0, "WR": 1.0, "TE": 0.95}
+# Positional value multipliers — applied to the composite before pick mapping.
+# Superflex-tuned: QBs carry a real premium because they can start in the SF slot.
+# A value of 1.18 pushes a high-composite QB up roughly a full round vs. a flex player.
+POSITION_VALUE = {"QB": 1.18, "RB": 1.0, "WR": 1.0, "TE": 0.95}
+
+# Non-linear score → pick mapping (logistic curve).
+# midpoint  = composite score that lands around the round-2/round-3 turn
+# steepness = how sharply value changes near the midpoint
+# The curve compresses the elite tier (90+ all cluster in round 1, a few picks apart)
+# and flattens the late rounds (sub-50 composites bunch into rounds 3-4).
+PICK_CURVE = {"midpoint": 68.0, "steepness": 0.10}

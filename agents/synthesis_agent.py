@@ -4,7 +4,7 @@ combines with league settings, live roster need, and crowd sentiment.
 Outputs final recommendation as exact round.pick notation.
 """
 
-import os, sys, json, re, asyncio
+import os, sys, json, re, asyncio, math
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from dotenv import load_dotenv
@@ -20,7 +20,7 @@ from tools.sleeper import (
     get_user, get_rosters, get_users_in_league,
     get_nfl_players, get_trending, search_players,
 )
-from config.league import LEAGUE, WEIGHTS, POSITION_VALUE
+from config.league import LEAGUE, WEIGHTS, POSITION_VALUE, PICK_CURVE
 from agents.situation_agent import run_situation_agent
 from agents.production_agent import run_production_agent
 
@@ -170,15 +170,23 @@ def compute_composite_score(
     durability_score: int,
     sentiment_rank: int | None,
     rookie_class_size: int,
+    position: str,
 ) -> dict:
     """
-    Compute the weighted composite score and map to a recommended draft pick.
+    Compute the weighted composite score and map it to a recommended draft pick.
 
     Weights: Talent 43% / Opportunity 38% / Risk 15% / Sentiment 4%
     Risk is converted from durability_score (1-5) to 0-100 scale: (score-1)/4 * 100
     Sentiment is converted from rank to 0-100: absent = 50 (neutral), rank 1 = ~90, last = ~20
 
-    Returns composite_score, component_scores, and recommended/floor/ceiling as round.pick.
+    position: 'QB', 'RB', 'WR', or 'TE'. A superflex positional-value multiplier is
+    applied to the base composite (QBs get a premium, TEs a slight discount) before
+    the pick mapping. The score → pick conversion is a non-linear logistic curve:
+    elite composites cluster in round 1 a few picks apart, while weak composites
+    flatten into rounds 3-4.
+
+    Returns base + position-adjusted composite, component scores, and
+    recommended/floor/ceiling as round.pick.
     """
     risk_score = ((durability_score - 1) / 4) * 100
 
@@ -188,29 +196,40 @@ def compute_composite_score(
         # Rank 1 in a class of N → score near 90; last rank → score near 20
         sentiment_score = max(20, 90 - ((sentiment_rank - 1) / max(rookie_class_size, 1)) * 70)
 
-    composite = (
+    base_composite = (
         talent_score * WEIGHTS["talent"]
         + opportunity_score * WEIGHTS["opportunity"]
         + risk_score * WEIGHTS["risk"]
         + sentiment_score * WEIGHTS["sentiment"]
     )
 
-    total_picks = LEAGUE["total_picks"]  # 48
+    # Superflex positional value: scale the composite, then clamp to 0-100.
+    pos_mult = POSITION_VALUE.get((position or "").upper(), 1.0)
+    adj_composite = max(0.0, min(100.0, base_composite * pos_mult))
+
+    total_picks = LEAGUE["total_picks"]        # 48
     picks_per_round = LEAGUE["picks_per_round"]  # 12
+    mid = PICK_CURVE["midpoint"]
+    steep = PICK_CURVE["steepness"]
 
     def score_to_pick(score: float) -> str:
-        # score 100 → pick 1, score 0 → pick 48
-        pick_num = max(1, min(total_picks, round(total_picks - (score / 100) * (total_picks - 1))))
+        # Logistic: high score → pick 1 (steeply separated at the top),
+        # low score → pick 48 (flattened). f in [0,1], 0 = best.
+        f = 1.0 / (1.0 + math.exp(steep * (score - mid)))
+        pick_num = int(max(1, min(total_picks, round(1 + f * (total_picks - 1)))))
         round_num = (pick_num - 1) // picks_per_round + 1
         pick_in_round = (pick_num - 1) % picks_per_round + 1
         return f"{round_num}.{pick_in_round:02d}"
 
-    recommended = score_to_pick(composite)
-    floor_pick = score_to_pick(max(0, composite - 15))
-    ceiling_pick = score_to_pick(min(100, composite + 15))
+    recommended = score_to_pick(adj_composite)
+    floor_pick = score_to_pick(max(0, adj_composite - 15))
+    ceiling_pick = score_to_pick(min(100, adj_composite + 15))
 
     return {
-        "composite_score": round(composite, 1),
+        "composite_score": round(adj_composite, 1),
+        "base_composite_score": round(base_composite, 1),
+        "position": (position or "").upper(),
+        "position_multiplier": pos_mult,
         "components": {
             "talent": round(talent_score * WEIGHTS["talent"], 1),
             "opportunity": round(opportunity_score * WEIGHTS["opportunity"], 1),
@@ -239,12 +258,19 @@ You orchestrate the full evaluation pipeline for a rookie prospect:
 2. Call evaluate_production → get Talent Grade + Risk Modifier
 3. Call get_my_roster_needs → understand which positions I actually need
 4. Call get_sentiment_signal → crowd interest context
-5. Call compute_composite_score with the numeric scores from steps 1-2-4
+5. Call compute_composite_score with the numeric scores from steps 1-2-4 AND the player's
+   position (QB/RB/WR/TE) — the position drives the superflex value premium
 6. Synthesize everything into the final structured recommendation
 
-League format: 4 rounds, 12 picks/round (48 total picks).
+League format: 4 rounds, 12 picks/round (48 total picks). THIS IS A SUPERFLEX LEAGUE —
+QBs can start in the SF slot, so they carry a real value premium that compute_composite_score
+applies automatically via the position multiplier. Reflect this in your narrative for QBs.
+
 Picks are expressed in exact round.pick notation: 1.01 through 4.12.
 The recommended pick is a relative positioning signal (like ADP), not a literal instruction.
+The score → pick mapping is non-linear: elite prospects compress into round 1 (a few picks
+apart), while weaker grades flatten into rounds 3-4 — so small composite gaps at the top
+matter far more than the same gap in the late rounds.
 
 Roster need context: use it as a modifier on your narrative recommendation — a player at a
 position of high need is worth paying up for (mention this). A position of low need means
