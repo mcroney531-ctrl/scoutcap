@@ -200,6 +200,8 @@ if "analysis_cache" not in st.session_state:
     st.session_state.analysis_cache = {}
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = {}
+if "view" not in st.session_state:
+    st.session_state.view = "home"
 
 # ── Data loading ──────────────────────────────────────────────────────────────
 
@@ -290,6 +292,84 @@ with st.sidebar:
 
 # ── Main panel ────────────────────────────────────────────────────────────────
 
+# ── All-prospects table view ──────────────────────────────────────────────────
+
+if st.session_state.view == "all":
+    import pandas as pd
+
+    brand_bar("Full 2026 rookie prospect list")
+
+    top_l, top_r = st.columns([6, 1])
+    with top_l:
+        st.markdown(f"### 📊 All Prospects · {len(rookies)} players")
+    with top_r:
+        if st.button("← Back", use_container_width=True):
+            st.session_state.view = "home"
+            st.rerun()
+
+    # Sort controls
+    sort_fields = {
+        "Sleeper Rank": "search_rank",
+        "Name": "full_name",
+        "Position": "position",
+        "Team": "team",
+        "College": "college",
+        "Depth Chart": "depth_chart_order",
+    }
+    sc1, sc2, sc3 = st.columns([3, 2, 3])
+    with sc1:
+        sort_label = st.selectbox("Sort by", list(sort_fields.keys()), index=0)
+    with sc2:
+        sort_dir = st.radio("Order", ["Asc", "Desc"], horizontal=True, label_visibility="visible")
+    with sc3:
+        pos_pick = st.multiselect("Positions", ["QB", "RB", "WR", "TE"], default=["QB", "RB", "WR", "TE"])
+
+    sort_key = sort_fields[sort_label]
+    rows = [r for r in rookies if r["position"] in pos_pick]
+
+    def _sort_val(r):
+        v = r.get(sort_key)
+        if v is None:
+            return (1, "")  # push missing values last
+        return (0, v if not isinstance(v, str) else v.lower())
+
+    rows = sorted(rows, key=_sort_val, reverse=(sort_dir == "Desc"))
+
+    df = pd.DataFrame(
+        [
+            {
+                "Rank": r["search_rank"] if r["search_rank"] < 9999999 else None,
+                "Name": r["full_name"],
+                "Pos": r["position"],
+                "Team": r["team"],
+                "College": r["college"] or "—",
+                "Depth": r["depth_chart_order"],
+                "Status": r["status"] or "—",
+            }
+            for r in rows
+        ]
+    )
+
+    st.caption("Click a row to scout that prospect.")
+    event = st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True,
+        height=560,
+        on_select="rerun",
+        selection_mode="single-row",
+    )
+
+    selected_rows = getattr(getattr(event, "selection", None), "rows", []) or []
+    if selected_rows:
+        chosen = rows[selected_rows[0]]
+        st.session_state.selected_player = chosen
+        st.session_state.view = "home"
+        st.rerun()
+
+    st.stop()
+
+
 if st.session_state.selected_player is None:
     brand_bar("Three-agent dynasty draft evaluation engine")
 
@@ -333,6 +413,11 @@ if st.session_state.selected_player is None:
                     if st.button("✕", key=f"board_rm_{pid}"):
                         st.session_state.shortlist.remove(pid)
                         st.rerun()
+
+    st.write("")
+    if st.button("📊 View all prospects →", use_container_width=True):
+        st.session_state.view = "all"
+        st.rerun()
 
     st.stop()
 
