@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import streamlit as st
+import pandas as pd
 
 # ── Page config ───────────────────────────────────────────────────────────────
 
@@ -187,6 +188,92 @@ def brand_bar(subtitle: str):
     )
 
 
+SORT_FIELDS = {
+    "Sleeper Rank": "search_rank",
+    "Name": "full_name",
+    "Position": "position",
+    "Team": "team",
+    "College": "college",
+    "Depth Chart": "depth_chart_order",
+}
+
+
+def render_prospect_table(all_rows, key_prefix):
+    """Sortable, filterable prospect table with a ★ favorite checkbox per row.
+
+    Ticking ★ adds/removes the player from My Board (st.session_state.shortlist).
+    A selectbox + Scout button runs the pipeline for a chosen prospect.
+    """
+    # Sort + filter controls
+    sc1, sc2, sc3 = st.columns([3, 2, 3])
+    sort_label = sc1.selectbox("Sort by", list(SORT_FIELDS.keys()), index=0, key=f"{key_prefix}_sortby")
+    sort_dir = sc2.radio("Order", ["Asc", "Desc"], horizontal=True, key=f"{key_prefix}_order")
+    pos_pick = sc3.multiselect(
+        "Positions", ["QB", "RB", "WR", "TE"], default=["QB", "RB", "WR", "TE"], key=f"{key_prefix}_pos"
+    )
+
+    sort_key = SORT_FIELDS[sort_label]
+
+    def _sv(r):
+        v = r.get(sort_key)
+        if v is None or v == "":
+            return (1, "")  # push missing values last
+        return (0, v.lower() if isinstance(v, str) else v)
+
+    rows = [r for r in all_rows if r["position"] in pos_pick]
+    rows = sorted(rows, key=_sv, reverse=(sort_dir == "Desc"))
+
+    if not rows:
+        st.info("No prospects match the current filter.")
+        return
+
+    df = pd.DataFrame(
+        [
+            {
+                "★": r["player_id"] in st.session_state.shortlist,
+                "Rank": r["search_rank"] if r["search_rank"] < 9999999 else None,
+                "Name": r["full_name"],
+                "Pos": r["position"],
+                "Team": r["team"],
+                "College": r["college"] or "—",
+                "Depth": r["depth_chart_order"],
+                "Status": r["status"] or "—",
+            }
+            for r in rows
+        ]
+    )
+
+    st.caption("Tick ★ to track a prospect on My Board.")
+    edited = st.data_editor(
+        df,
+        column_config={"★": st.column_config.CheckboxColumn("★", help="Track on My Board", width="small")},
+        disabled=["Rank", "Name", "Pos", "Team", "College", "Depth", "Status"],
+        hide_index=True,
+        use_container_width=True,
+        height=560,
+        key=f"{key_prefix}_editor",
+    )
+
+    # Sync ★ column back to the shortlist
+    display_ids = {r["player_id"] for r in rows}
+    displayed_favs = [rows[i]["player_id"] for i in range(len(rows)) if bool(edited.iloc[i]["★"])]
+    preserved = [pid for pid in st.session_state.shortlist if pid not in display_ids]
+    new_shortlist = preserved + displayed_favs
+    if set(new_shortlist) != set(st.session_state.shortlist):
+        st.session_state.shortlist = new_shortlist
+        st.rerun()
+
+    # Scout a prospect from this table
+    names = [r["full_name"] for r in rows]
+    sa, sb = st.columns([5, 1])
+    pick = sa.selectbox("Scout a prospect", names, key=f"{key_prefix}_scoutpick")
+    if sb.button("🔍 Scout", key=f"{key_prefix}_scoutbtn", use_container_width=True):
+        chosen = next(r for r in rows if r["full_name"] == pick)
+        st.session_state.selected_player = chosen
+        st.session_state.view = "home"
+        st.rerun()
+
+
 from tools.sleeper import get_nfl_players, get_user, get_rosters
 from agents.synthesis_agent import run_synthesis_agent
 
@@ -295,8 +382,6 @@ with st.sidebar:
 # ── All-prospects table view ──────────────────────────────────────────────────
 
 if st.session_state.view == "all":
-    import pandas as pd
-
     brand_bar("Full 2026 rookie prospect list")
 
     top_l, top_r = st.columns([6, 1])
@@ -307,66 +392,31 @@ if st.session_state.view == "all":
             st.session_state.view = "home"
             st.rerun()
 
-    # Sort controls
-    sort_fields = {
-        "Sleeper Rank": "search_rank",
-        "Name": "full_name",
-        "Position": "position",
-        "Team": "team",
-        "College": "college",
-        "Depth Chart": "depth_chart_order",
-    }
-    sc1, sc2, sc3 = st.columns([3, 2, 3])
-    with sc1:
-        sort_label = st.selectbox("Sort by", list(sort_fields.keys()), index=0)
-    with sc2:
-        sort_dir = st.radio("Order", ["Asc", "Desc"], horizontal=True, label_visibility="visible")
-    with sc3:
-        pos_pick = st.multiselect("Positions", ["QB", "RB", "WR", "TE"], default=["QB", "RB", "WR", "TE"])
+    render_prospect_table(rookies, "all")
+    st.stop()
 
-    sort_key = sort_fields[sort_label]
-    rows = [r for r in rookies if r["position"] in pos_pick]
 
-    def _sort_val(r):
-        v = r.get(sort_key)
-        if v is None:
-            return (1, "")  # push missing values last
-        return (0, v if not isinstance(v, str) else v.lower())
+# ── My Board table view ───────────────────────────────────────────────────────
 
-    rows = sorted(rows, key=_sort_val, reverse=(sort_dir == "Desc"))
+if st.session_state.view == "board":
+    brand_bar("Your tracked prospects")
 
-    df = pd.DataFrame(
-        [
-            {
-                "Rank": r["search_rank"] if r["search_rank"] < 9999999 else None,
-                "Name": r["full_name"],
-                "Pos": r["position"],
-                "Team": r["team"],
-                "College": r["college"] or "—",
-                "Depth": r["depth_chart_order"],
-                "Status": r["status"] or "—",
-            }
-            for r in rows
-        ]
-    )
+    top_l, top_r = st.columns([6, 1])
+    with top_l:
+        st.markdown(f"### 📋 My Board · {len(st.session_state.shortlist)} tracked")
+    with top_r:
+        if st.button("← Back", use_container_width=True):
+            st.session_state.view = "home"
+            st.rerun()
 
-    st.caption("Click a row to scout that prospect.")
-    event = st.dataframe(
-        df,
-        use_container_width=True,
-        hide_index=True,
-        height=560,
-        on_select="rerun",
-        selection_mode="single-row",
-    )
-
-    selected_rows = getattr(getattr(event, "selection", None), "rows", []) or []
-    if selected_rows:
-        chosen = rows[selected_rows[0]]
-        st.session_state.selected_player = chosen
-        st.session_state.view = "home"
-        st.rerun()
-
+    tracked = [r for r in rookies if r["player_id"] in st.session_state.shortlist]
+    if not tracked:
+        st.info("Your board is empty. Star players (★) from **All Prospects** or a scouting report to track them here.")
+        if st.button("📊 Browse all prospects →"):
+            st.session_state.view = "all"
+            st.rerun()
+    else:
+        render_prospect_table(tracked, "board")
     st.stop()
 
 
@@ -388,31 +438,28 @@ if st.session_state.selected_player is None:
         with col3:
             st.info("**Synthesis Agent**\nOrchestrates both + roster need + sentiment → Pick recommendation")
 
-    # ── My Board card ─────────────────────────────────────────────────────────
-    pos_colors = {"QB": "🟦", "RB": "🟩", "WR": "🟨", "TE": "🟧"}
-
+    # ── My Board card (click to open the board table) ─────────────────────────
     with st.container(border=True):
-        st.markdown(f"### 📋 My Board &nbsp;<span class='grade-pill' style='background:{P['accent']}22;color:{P['accent']};border:1px solid {P['accent']}66;'>{len(st.session_state.shortlist)}</span>", unsafe_allow_html=True)
+        n = len(st.session_state.shortlist)
+        st.markdown(
+            f"### 📋 My Board &nbsp;<span class='grade-pill' "
+            f"style='background:{P['accent']}22;color:{P['accent']};border:1px solid {P['accent']}66;'>{n}</span>",
+            unsafe_allow_html=True,
+        )
 
         if not st.session_state.shortlist:
-            st.caption("Your board is empty. Star players from the draft board (⭐) to add them here, then scout them with one click.")
+            st.caption("Your board is empty. Star players (★) from All Prospects or a scouting report to track them here.")
         else:
-            for pid in list(st.session_state.shortlist):
-                match = next((r for r in rookies if r["player_id"] == pid), None)
-                if not match:
-                    continue
-                icon = pos_colors.get(match["position"], "⬜")
-                c_name, c_scout, c_rm = st.columns([5, 2, 1])
-                with c_name:
-                    st.markdown(f"{icon} **{match['full_name']}** · {match['position']} · {match['team']}")
-                with c_scout:
-                    if st.button("Scout", key=f"board_scout_{pid}", use_container_width=True):
-                        st.session_state.selected_player = match
-                        st.rerun()
-                with c_rm:
-                    if st.button("✕", key=f"board_rm_{pid}"):
-                        st.session_state.shortlist.remove(pid)
-                        st.rerun()
+            preview = [
+                next((r["full_name"] for r in rookies if r["player_id"] == pid), None)
+                for pid in st.session_state.shortlist
+            ]
+            preview = [p for p in preview if p]
+            st.caption(", ".join(preview[:6]) + (" …" if len(preview) > 6 else ""))
+
+        if st.button("Open My Board →", use_container_width=True, key="open_board"):
+            st.session_state.view = "board"
+            st.rerun()
 
     st.write("")
     if st.button("📊 View all prospects →", use_container_width=True):
@@ -435,11 +482,13 @@ with col_name:
     st.caption(f"{player['position']} · {player['team']} · {player['college']}")
 with col_add:
     if pid not in st.session_state.shortlist:
-        if st.button("⭐ Add to shortlist"):
+        if st.button("⭐ Favorite", use_container_width=True):
             st.session_state.shortlist.append(pid)
             st.rerun()
     else:
-        st.success("On shortlist")
+        if st.button("★ Favorited — remove", use_container_width=True):
+            st.session_state.shortlist.remove(pid)
+            st.rerun()
 
 st.divider()
 
