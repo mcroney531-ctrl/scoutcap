@@ -80,6 +80,14 @@ P = PALETTES["light"] if _light else PALETTES["dark"]
 st.markdown(
     f"""
     <style>
+      @import url('https://fonts.googleapis.com/css2?family=SN+Pro:ital,wght@0,300;0,400;0,600;0,700;0,800;1,400&display=swap');
+
+      /* Typeface — SN Pro everywhere */
+      html, body, .stApp, button, input, textarea, select,
+      [class*="st-"], [data-testid] {{
+        font-family: 'SN Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+      }}
+
       /* Base surfaces (override config.toml so the toggle can flip the theme) */
       .stApp, [data-testid="stAppViewContainer"] {{
         background-color: {P['app_bg']}; color: {P['text']};
