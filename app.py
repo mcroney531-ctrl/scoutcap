@@ -23,19 +23,24 @@ st.set_page_config(
 # ── Secrets sync (must run after set_page_config so Streamlit runtime is ready) ──
 
 def _init_secrets():
+    _errors = []
     for _key in ["ANTHROPIC_API_KEY", "GOOGLE_API_KEY", "SLEEPER_USERNAME", "SLEEPER_LEAGUE_ID"]:
         try:
-            val = st.secrets[_key]
-            os.environ[_key] = val
-        except Exception:
-            pass
+            val = str(st.secrets[_key]).strip()
+            if val:
+                os.environ[_key] = val
+            else:
+                _errors.append(f"{_key} is empty in secrets")
+        except Exception as e:
+            _errors.append(f"{_key} not found: {e}")
     try:
         import litellm
         litellm.anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
     except Exception:
         pass
+    return _errors
 
-_init_secrets()
+_secret_errors = _init_secrets()
 
 from tools.sleeper import get_nfl_players, get_user, get_rosters
 from agents.synthesis_agent import run_synthesis_agent
@@ -80,6 +85,13 @@ def load_rookies():
 
 with st.sidebar:
     st.markdown("## 🏈 2026 Rookie Draft Board")
+
+    # API key diagnostic — remove once confirmed working
+    _api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if _api_key:
+        st.caption(f"🔑 API key loaded ({_api_key[:4]}...{_api_key[-4:]})")
+    else:
+        st.error(f"❌ ANTHROPIC_API_KEY missing. Secrets errors: {_secret_errors}")
 
     rookies = load_rookies()
 
