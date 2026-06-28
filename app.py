@@ -11,11 +11,17 @@ load_dotenv()
 
 import streamlit as st
 
-# Sync Streamlit Cloud secrets into os.environ
+# Pull each secret explicitly by name into os.environ
+for _secret_key in ["ANTHROPIC_API_KEY", "GOOGLE_API_KEY", "SLEEPER_USERNAME", "SLEEPER_LEAGUE_ID"]:
+    try:
+        os.environ[_secret_key] = st.secrets[_secret_key]
+    except Exception:
+        pass
+
+# Belt-and-suspenders: set LiteLLM's global anthropic key directly
 try:
-    if len(st.secrets) > 0:
-        for _k, _v in st.secrets.items():
-            os.environ[_k] = str(_v)
+    import litellm
+    litellm.anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
 except Exception:
     pass
 
