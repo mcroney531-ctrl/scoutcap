@@ -5,19 +5,20 @@ Rookie Draft Scouting Agent — Streamlit frontend
 import os, sys, asyncio, json
 sys.path.insert(0, os.path.dirname(__file__))
 
-import streamlit as st
+# Sync Streamlit Cloud secrets into os.environ BEFORE any other imports
+# so LiteLLM and anthropic SDK pick them up at load time
+try:
+    import streamlit as _st_early
+    for _k, _v in _st_early.secrets.items():
+        os.environ[_k] = str(_v)
+except Exception:
+    pass
+
+# Fall back to .env for local dev
 from dotenv import load_dotenv
 load_dotenv()
 
-# On Streamlit Cloud, secrets live in st.secrets — sync them into os.environ
-# so all downstream code using os.getenv() works without changes
-try:
-    import streamlit as _st
-    for _k, _v in _st.secrets.items():
-        if _k not in os.environ:
-            os.environ[_k] = str(_v)
-except Exception:
-    pass
+import streamlit as st
 
 from tools.sleeper import get_nfl_players, get_user, get_rosters
 from agents.synthesis_agent import run_synthesis_agent

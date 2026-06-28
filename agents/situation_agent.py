@@ -170,7 +170,7 @@ Output format — always return a JSON object with these exact keys:
 
 def build_situation_agent() -> LlmAgent:
     return LlmAgent(
-        model=LiteLlm(model="anthropic/claude-sonnet-4-6"),
+        model=LiteLlm(model="anthropic/claude-sonnet-4-6", api_key=os.getenv("ANTHROPIC_API_KEY")),
         name="situation_agent",
         instruction=SYSTEM_PROMPT,
         tools=[
