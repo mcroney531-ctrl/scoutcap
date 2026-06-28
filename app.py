@@ -292,19 +292,48 @@ with st.sidebar:
 
 if st.session_state.selected_player is None:
     brand_bar("Three-agent dynasty draft evaluation engine")
-    st.markdown(
-        "Select a prospect from the draft board to run a full scouting report.\n\n"
-        "The three-agent pipeline evaluates **Talent**, **Opportunity**, and **Risk** "
-        "independently, then combines them into a dynasty draft recommendation."
-    )
 
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.info("**Situation Agent**\nDepth chart + draft capital → Opportunity Grade")
-    with col2:
-        st.info("**Production Agent**\nCollege stats + injury history → Talent Grade + Risk")
-    with col3:
-        st.info("**Synthesis Agent**\nOrchestrates both + roster need + sentiment → Pick recommendation")
+    # How it works — folded away so the landing page stays open
+    with st.expander("❓ How it Works", expanded=False):
+        st.markdown(
+            "Select a prospect from the draft board to run a full scouting report. "
+            "The three-agent pipeline evaluates **Talent**, **Opportunity**, and **Risk** "
+            "independently, then combines them into a dynasty draft recommendation."
+        )
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.info("**Situation Agent**\nDepth chart + draft capital → Opportunity Grade")
+        with col2:
+            st.info("**Production Agent**\nCollege stats + injury history → Talent Grade + Risk")
+        with col3:
+            st.info("**Synthesis Agent**\nOrchestrates both + roster need + sentiment → Pick recommendation")
+
+    # ── My Board card ─────────────────────────────────────────────────────────
+    pos_colors = {"QB": "🟦", "RB": "🟩", "WR": "🟨", "TE": "🟧"}
+
+    with st.container(border=True):
+        st.markdown(f"### 📋 My Board &nbsp;<span class='grade-pill' style='background:{P['accent']}22;color:{P['accent']};border:1px solid {P['accent']}66;'>{len(st.session_state.shortlist)}</span>", unsafe_allow_html=True)
+
+        if not st.session_state.shortlist:
+            st.caption("Your board is empty. Star players from the draft board (⭐) to add them here, then scout them with one click.")
+        else:
+            for pid in list(st.session_state.shortlist):
+                match = next((r for r in rookies if r["player_id"] == pid), None)
+                if not match:
+                    continue
+                icon = pos_colors.get(match["position"], "⬜")
+                c_name, c_scout, c_rm = st.columns([5, 2, 1])
+                with c_name:
+                    st.markdown(f"{icon} **{match['full_name']}** · {match['position']} · {match['team']}")
+                with c_scout:
+                    if st.button("Scout", key=f"board_scout_{pid}", use_container_width=True):
+                        st.session_state.selected_player = match
+                        st.rerun()
+                with c_rm:
+                    if st.button("✕", key=f"board_rm_{pid}"):
+                        st.session_state.shortlist.remove(pid)
+                        st.rerun()
+
     st.stop()
 
 player = st.session_state.selected_player
