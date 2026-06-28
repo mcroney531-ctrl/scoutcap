@@ -42,6 +42,110 @@ def _init_secrets():
 
 _secret_errors = _init_secrets()
 
+# ── Theme / custom CSS ────────────────────────────────────────────────────────
+
+GOLD = "#e8b84b"
+GOLD_DIM = "#b8902f"
+INK = "#0f1419"
+PANEL = "#1a2029"
+PANEL_2 = "#222b36"
+TEXT = "#e6e9ef"
+MUTED = "#8b97a8"
+
+st.markdown(
+    f"""
+    <style>
+      /* Tighten top padding so the brand bar sits high */
+      .block-container {{ padding-top: 2.2rem; }}
+
+      /* Brand bar */
+      .brand-bar {{
+        display: flex; align-items: center; gap: 0.75rem;
+        padding: 0.9rem 1.25rem; margin-bottom: 1.2rem;
+        background: linear-gradient(135deg, {PANEL} 0%, {INK} 100%);
+        border: 1px solid rgba(232,184,75,0.25);
+        border-left: 4px solid {GOLD};
+        border-radius: 10px;
+      }}
+      .brand-mark {{ font-size: 1.7rem; line-height: 1; }}
+      .brand-title {{
+        font-size: 1.35rem; font-weight: 800; letter-spacing: -0.01em;
+        color: {TEXT}; margin: 0;
+      }}
+      .brand-title .accent {{ color: {GOLD}; }}
+      .brand-sub {{ font-size: 0.8rem; color: {MUTED}; margin: 0.1rem 0 0 0; }}
+
+      /* Grade badge pills */
+      .grade-pill {{
+        display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px;
+        font-weight: 800; font-size: 0.95rem; letter-spacing: 0.02em;
+      }}
+
+      /* Sidebar draft-board buttons: left-align, compact */
+      section[data-testid="stSidebar"] .stButton > button {{
+        text-align: left; justify-content: flex-start;
+        font-size: 0.86rem; padding: 0.32rem 0.6rem;
+        border: 1px solid rgba(255,255,255,0.06);
+        background: {PANEL};
+      }}
+      section[data-testid="stSidebar"] .stButton > button:hover {{
+        border-color: {GOLD}; color: {GOLD}; background: {PANEL_2};
+      }}
+
+      /* Metric cards */
+      div[data-testid="stMetric"] {{
+        background: {PANEL}; border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 10px; padding: 0.7rem 0.9rem;
+      }}
+      div[data-testid="stMetricValue"] {{ color: {GOLD}; }}
+
+      /* Expander header */
+      details summary {{ font-weight: 700; }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+def grade_color(grade: str) -> str:
+    """Map a letter grade to a color for badge tinting."""
+    if not grade or grade == "—":
+        return MUTED
+    g = grade[0].upper()
+    return {
+        "A": "#3fb950",   # green
+        "B": "#58a6ff",   # blue
+        "C": GOLD,        # gold
+        "D": "#e3873c",   # orange
+        "F": "#f85149",   # red
+    }.get(g, MUTED)
+
+
+def grade_pill(grade: str) -> str:
+    """Return an HTML pill for a letter grade."""
+    c = grade_color(grade)
+    return (
+        f'<span class="grade-pill" '
+        f'style="background:{c}22; color:{c}; border:1px solid {c}66;">{grade}</span>'
+    )
+
+
+def brand_bar(subtitle: str):
+    """Render the gold-accent brand bar with a contextual subtitle."""
+    st.markdown(
+        f"""
+        <div class="brand-bar">
+          <div class="brand-mark">🏈</div>
+          <div>
+            <p class="brand-title">Rookie <span class="accent">Scout</span></p>
+            <p class="brand-sub">{subtitle}</p>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 from tools.sleeper import get_nfl_players, get_user, get_rosters
 from agents.synthesis_agent import run_synthesis_agent
 
@@ -144,7 +248,7 @@ with st.sidebar:
 # ── Main panel ────────────────────────────────────────────────────────────────
 
 if st.session_state.selected_player is None:
-    st.markdown("## Rookie Draft Scout")
+    brand_bar("Three-agent dynasty draft evaluation engine")
     st.markdown(
         "Select a prospect from the draft board to run a full scouting report.\n\n"
         "The three-agent pipeline evaluates **Talent**, **Opportunity**, and **Risk** "
@@ -165,6 +269,8 @@ pid = player["player_id"]
 name = player["full_name"]
 
 # ── Player header ─────────────────────────────────────────────────────────────
+
+brand_bar("Scouting report")
 
 col_name, col_add = st.columns([5, 1])
 with col_name:
@@ -220,6 +326,13 @@ else:
     roster_need = analysis.get("roster_need", "—")
 
     with st.expander("📋 Scouting Report", expanded=True):
+        # Grade badges
+        st.markdown(
+            f"Talent {grade_pill(talent_g)} &nbsp;&nbsp; Opportunity {grade_pill(opp_g)}",
+            unsafe_allow_html=True,
+        )
+        st.write("")
+
         # Grade row
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Talent Grade", talent_g, f"Score: {analysis.get('talent_score', '—')}")
