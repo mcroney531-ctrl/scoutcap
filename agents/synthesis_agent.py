@@ -278,6 +278,13 @@ you might let this player fall or skip entirely.
 
 Sentiment note: if overall platform activity is low, say so and treat sentiment as color only.
 
+Competition: the evaluate_situation result contains a "competition" breakdown grading the
+veterans ahead of this rookie by quality (not just count). Carry it through into the output
+"competition" object — list only the notable competitors (grade C or better) in "notable",
+put the number of grade D/F bodies in "replaceable_count", and write a one-line summary.
+Weave the headline insight into your narrative (e.g. "buried on paper, but the bodies ahead
+are all replaceable — a soft room").
+
 After reaching your own conclusion, briefly compare it to KeepTradeCut dynasty value if you
 have any general knowledge of where this player sits in dynasty consensus — surface agreement
 or explain specific divergence. Do NOT fold KTC into the composite score.
@@ -300,6 +307,14 @@ Output format — return a JSON object with these exact keys:
     "rank_in_class": null,
     "activity_level": "low",
     "note": "..."
+  },
+  "competition": {
+    "veteran_count": 8,
+    "strongest_competitor_grade": "C",
+    "replaceable_count": 7,
+    "room_strength": "moderate — one flex-level veteran to beat out, no entrenched star",
+    "notable": [{"name": "Terry McLaurin", "grade": "C"}],
+    "summary": "1 real competitor (McLaurin, C); the rest are replaceable depth (D/F)"
   },
   "composite_score": 82.4,
   "floor_pick": "2.08",

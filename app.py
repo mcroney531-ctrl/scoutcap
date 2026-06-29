@@ -567,6 +567,34 @@ else:
 
         st.divider()
 
+        # Veteran competition (quality, not just headcount)
+        comp = analysis.get("competition", {})
+        if comp:
+            vet_n = comp.get("veteran_count", "—")
+            repl = comp.get("replaceable_count")
+            room = comp.get("room_strength", "")
+            notable = comp.get("notable", []) or []
+
+            head = f"**🪑 Veteran Competition:** {vet_n} ahead"
+            if repl is not None:
+                head += f" · {repl} replaceable (D/F)"
+            st.markdown(head)
+
+            if notable:
+                pills = " ".join(
+                    f"{c.get('name', '?')} {grade_pill(c.get('grade', '—'))}" for c in notable
+                )
+                st.markdown(f"Real competition: {pills}", unsafe_allow_html=True)
+            else:
+                st.caption("No grade-C-or-better veteran ahead — soft room.")
+
+            if room:
+                st.caption(room)
+            if comp.get("summary"):
+                st.caption(comp["summary"])
+
+            st.divider()
+
         # Narrative
         st.markdown("**Analysis**")
         st.markdown(analysis.get("narrative", ""))
