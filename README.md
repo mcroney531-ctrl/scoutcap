@@ -56,6 +56,53 @@ Situation and Production are called by Synthesis as **Agent Tools** (not full ha
 - [ ] Deployed live at: *[URL TBD]*
 - Built with: *[stack TBD — ADK / MCP server / frontend framework]*
 
+## MCP Server
+
+The scouting capabilities are also exposed over the **Model Context Protocol** via
+`mcp_server.py` (built on the official `mcp` Python SDK / FastMCP, stdio transport).
+This lets any MCP client — Claude Desktop, etc. — use the same data layer and pipeline
+that the ADK agents use. Two layers are exposed:
+
+**Granular data tools**
+
+| Tool | Returns |
+|---|---|
+| `search_prospects(name)` | 2026 draft prospects (ESPN) — draft capital, scout grade, ranks |
+| `player_opportunity(name)` | Sleeper depth chart, team, status |
+| `draft_capital(name)` | ESPN draft round/pick, scout grade, ranks |
+| `veteran_competition(team, position)` | FantasyCalc-graded quality of the veterans ahead (soft room vs. entrenched starter) |
+| `dynasty_value(name)` | FantasyCalc dynasty + redraft value and positional grade (12-team SF PPR) |
+| `college_production(name)` | Career college stats (ESPN) |
+| `injury_history(name)` | Historical injury record (ESPN) |
+| `trending_adds(limit)` | Sleeper trending-add crowd-interest signal |
+
+**High-level pipeline tool**
+
+| Tool | Returns |
+|---|---|
+| `scout_rookie(name)` | Runs the full 3-agent pipeline → structured draft recommendation (grades, risk, competition, composite, recommended/floor/ceiling pick) |
+
+**Run it:**
+
+```bash
+python mcp_server.py        # stdio
+```
+
+**Claude Desktop** (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "rookie-scout": {
+      "command": "D:\\venvs\\kaggleproj312\\Scripts\\python.exe",
+      "args": ["C:\\Users\\myfit\\OneDrive\\Documents\\KaggleProj\\mcp_server.py"]
+    }
+  }
+}
+```
+
+`scout_rookie` requires `ANTHROPIC_API_KEY` in `.env` (the data tools do not).
+
 ## Setup
 
 *[To be filled in once build begins — should be accurate to actual steps taken, not reconstructed after the fact]*
@@ -63,7 +110,7 @@ Situation and Production are called by Synthesis as **Agent Tools** (not full ha
 ## Key Concepts Demonstrated
 
 - [x] Agent / Multi-agent system (ADK) — three-agent architecture above
-- [x] MCP Server — Sleeper integration + curated journalist tool
+- [x] MCP Server — `mcp_server.py` exposes 8 granular data tools + the high-level `scout_rookie` pipeline tool over stdio (FastMCP)
 - [x] Deployability — live deployment
 - [ ] Agent Skills — curated-source tool as on-demand dynamic context, framed per Day 1's static/dynamic context principle (optional 4th)
 - [ ] Security features — not yet decided whether this tool takes real actions (e.g. submitting a draft pick) that would warrant human-in-the-loop confirmation, or stays read-only advice
@@ -88,4 +135,7 @@ Situation and Production are called by Synthesis as **Agent Tools** (not full ha
 - Considered KeepTradeCut's crowdsourced dynasty value rankings as a data source, but decided against feeding it into the Composite Logic directly — doing so would risk making the agent system redundant with crowd consensus that's already been computed (undercutting the actual point of building independent agentic reasoning). Instead, KTC is used as a comparison anchor: Synthesis reaches its own conclusion first from the locked-in sources, then checks it against KTC's market value and explicitly surfaces agreement or the specific reasoning behind any divergence. Open question: whether KTC has a documented public API or requires fetching/parsing the rendered page directly — needs the same diligence applied to ESPN's endpoint structure before building against it.
 - Composite Logic base weighting locked: Talent 43% / Opportunity 38% / Risk 15% / Sentiment 4%. Market Consensus deliberately excluded from the weighting entirely (kept as comparison-only, per the decision above) — initial draft had it at a small 6% input, removed and redistributed proportionally into Talent and Opportunity (the two dominant levers), leaving Risk and Sentiment untouched at their deliberately small modifier weights. Decided to keep this weighting uniform across all positions rather than flexing per position — simpler design, no per-position complexity to maintain.
 - Architecture decisions complete for now. Moving into Claude Code for actual implementation.
+- Added a veteran-competition quality signal (FantasyCalc dynasty/redraft values) to the Situation Agent — grading the players *ahead* of a rookie rather than just counting them, so a soft depth chart (replaceable D/F vets) reads as a plus instead of a penalty. Used redraft value for the near-term competition grade so an aging-but-productive vet (e.g. McLaurin) still counts as real competition despite low dynasty value.
+- Improved the grade math: actually applied the (previously dead) positional-value multiplier for the superflex QB premium, and replaced the linear score→pick mapping with a logistic curve that compresses the elite tier into round 1 and flattens the late rounds.
+- Built the MCP server (`mcp_server.py`, FastMCP/stdio) exposing both the granular data tools and a high-level `scout_rookie` pipeline tool — reusing the existing `tools/` and agent layer rather than duplicating logic, so the data layer is consumable by any MCP client.
 

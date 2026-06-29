@@ -3,3 +3,5 @@ anthropic
 httpx
 python-dotenv
 streamlit
+pandas
+mcp[cli]
