@@ -275,8 +275,8 @@ def compute_composite_score(
         return f"{round_num}.{pick_in_round:02d}"
 
     recommended = score_to_pick(adj_composite)
-    floor_pick = score_to_pick(max(0, adj_composite - 15))
-    ceiling_pick = score_to_pick(min(100, adj_composite + 15))
+    floor_pick = score_to_pick(max(0, adj_composite - 6))
+    ceiling_pick = score_to_pick(min(100, adj_composite + 6))
 
     return {
         "composite_score": round(adj_composite, 1),
