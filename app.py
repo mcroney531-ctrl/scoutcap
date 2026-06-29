@@ -318,181 +318,94 @@ def _user_picks_for_slot(slot: int, rounds: int = 4, teams: int = 12) -> list:
     return picks
 
 
-def run_mock_draft(slot: int, pins: dict, variance: int, adp_ranking: list) -> dict:
-    """Simulate a 4-round 12-team snake draft.
-
-    pins: {overall_pick_int: player_id_str}
-    variance: std-dev of Gaussian noise applied to each player's ADP rank (0 = pure ADP).
-    """
-    teams, rounds = 12, 4
-    user_pick_set = set(_user_picks_for_slot(slot))
+def _start_draft(slot: int, pins: dict, variance: int, rookies: list):
+    """Initialize interactive draft state. Called once when user clicks Start Draft."""
+    adp = _get_adp_ranking(rookies)
+    user_picks_set = set(_user_picks_for_slot(slot))
     pinned_ids = {str(v) for v in pins.values()}
 
-    # Build available pool (excluding pinned players) with optional noise.
+    # Resolve pins to player dicts
+    pin_map = {}
+    for pick_num, pid in pins.items():
+        match = next((r for r in adp if str(r["player_id"]) == str(pid)), None)
+        if match:
+            pin_map[int(pick_num)] = match
+
+    # Build available pool with variance noise applied upfront (excludes pinned players)
     pool = []
-    for i, p in enumerate(adp_ranking):
+    for i, p in enumerate(adp):
         if str(p["player_id"]) not in pinned_ids:
             noise = random.gauss(0, variance) if variance > 0 else 0
             pool.append((i + noise, p))
     pool.sort(key=lambda x: x[0])
-    available = [p for _, p in pool]
 
-    pin_map = {}
-    for pick_num, pid in pins.items():
-        match = next((r for r in adp_ranking if str(r["player_id"]) == str(pid)), None)
-        if match:
-            pin_map[int(pick_num)] = match
-
-    picks = []
-    for n in range(1, teams * rounds + 1):
-        is_user = n in user_pick_set
-        if n in pin_map:
-            picks.append({"pick": n, "player": pin_map[n], "is_user": is_user, "pinned": True})
-        else:
-            player = available.pop(0) if available else None
-            picks.append({"pick": n, "player": player, "is_user": is_user, "pinned": False})
-
-    return {"picks": picks, "user_picks": [p for p in picks if p["is_user"]], "slot": slot}
+    st.session_state.mock_active = True
+    st.session_state.mock_draft_picks = []
+    st.session_state.mock_draft_available = [p for _, p in pool]
+    st.session_state.mock_draft_current_pick = 1
+    st.session_state.mock_draft_pin_map = pin_map
+    st.session_state.mock_draft_user_picks_set = user_picks_set
 
 
-def render_mock_draft(rookies: list):
-    """Full mock draft simulator view."""
-    brand_bar("2026 Mock Draft Simulator")
-
-    top_l, top_r = st.columns([6, 1])
-    with top_l:
-        st.markdown("### 🎯 Mock Draft Simulator")
-    with top_r:
-        if st.button("← Back", use_container_width=True, key="mock_back"):
-            st.session_state.view = "home"
-            st.rerun()
-
-    # ── Settings row ──────────────────────────────────────────────────────────
-    s1, s2, s3 = st.columns([2, 3, 3])
-
-    with s1:
-        slot = st.selectbox(
-            "Your draft slot",
-            options=list(range(1, 13)),
-            index=st.session_state.mock_slot - 1,
-            key="mock_slot_sel",
-            help="Your position in the 12-team league (1 = first pick overall)",
-        )
-        if slot != st.session_state.mock_slot:
-            st.session_state.mock_slot = slot
-            st.session_state.mock_result = None
-
-    with s2:
-        variance = st.slider(
-            "Variance",
-            min_value=0,
-            max_value=5,
-            value=st.session_state.mock_variance,
-            key="mock_var_slider",
-            help="0 = pure ADP order · 5 = heavy draft-day randomness",
-        )
-        if variance != st.session_state.mock_variance:
-            st.session_state.mock_variance = variance
-
-    with s3:
-        my_picks = _user_picks_for_slot(slot)
-        labels = "  ·  ".join(_pick_label(p) for p in my_picks)
-        st.metric("Your picks", labels)
-
-    # ── Pins expander ─────────────────────────────────────────────────────────
-    pin_count = len(st.session_state.mock_pins)
-    with st.expander(f"📌 Pre-set picks  ({pin_count} pinned)", expanded=bool(pin_count)):
-        if st.session_state.mock_pins:
-            for pick_num, pid in list(st.session_state.mock_pins.items()):
-                match = next((r for r in rookies if r["player_id"] == pid), None)
-                name_str = match["full_name"] if match else str(pid)
-                ca, cb = st.columns([6, 1])
-                ca.markdown(f"**{_pick_label(int(pick_num))}** &nbsp;→&nbsp; {name_str}", unsafe_allow_html=True)
-                if cb.button("✕", key=f"rm_pin_{pick_num}"):
-                    del st.session_state.mock_pins[pick_num]
-                    st.session_state.mock_result = None
-                    st.rerun()
-            st.divider()
-
-        rookie_names = ["(select player)"] + [r["full_name"] for r in rookies]
-        pa, pb, pc = st.columns([4, 2, 1])
-        pin_player = pa.selectbox("Player", rookie_names, key="mock_pin_player_sel")
-        pin_pick_num = pb.number_input(
-            "To overall pick #", min_value=1, max_value=48, value=1, step=1, key="mock_pin_pick_num"
-        )
-        if pc.button("+ Pin", key="add_pin_btn"):
-            if pin_player != "(select player)":
-                match = next((r for r in rookies if r["full_name"] == pin_player), None)
-                if match:
-                    st.session_state.mock_pins[int(pin_pick_num)] = match["player_id"]
-                    st.session_state.mock_result = None
-                    st.rerun()
-
-    # ── Run / Re-run ──────────────────────────────────────────────────────────
-    btn_c1, btn_c2, _ = st.columns([2, 1, 5])
-    run_pressed = btn_c1.button(
-        "▶ Run Simulation", use_container_width=True, type="primary", key="run_sim_btn"
-    )
-    rerun_pressed = btn_c2.button(
-        "🔄 Re-run", use_container_width=True, key="rerun_sim_btn",
-        disabled=(st.session_state.mock_result is None or variance == 0),
-    )
-
-    if run_pressed or rerun_pressed:
-        adp = _get_adp_ranking(rookies)
-        st.session_state.mock_result = run_mock_draft(
-            st.session_state.mock_slot, st.session_state.mock_pins,
-            st.session_state.mock_variance, adp,
-        )
-
-    result = st.session_state.mock_result
-    if result is None:
-        st.info("Configure your slot above and click **▶ Run Simulation** to see your projected haul.")
-        return
-
-    picks = result["picks"]
-    user_picks = result["user_picks"]
-
-    # ── Draft board HTML table ─────────────────────────────────────────────────
+def _render_draft_board(completed_map: dict, current_pick: int, user_picks_set: set, draft_done: bool):
+    """Render the HTML draft board grid (4 rounds × 12 picks)."""
     POS_COLOR = {"QB": "#3b82f6", "RB": "#3fb950", "WR": "#e8b84b", "TE": "#e3873c"}
-
     rows_html = ""
     for round_idx in range(4):
         cells = ""
-        for pp in picks[round_idx * 12:(round_idx + 1) * 12]:
-            player = pp.get("player")
-            is_user = pp["is_user"]
-            is_pin = pp.get("pinned", False)
+        for pick_n in range(round_idx * 12 + 1, round_idx * 12 + 13):
+            lbl = _pick_label(pick_n)
+            pp = completed_map.get(pick_n)
+            is_on_clock = (pick_n == current_pick and not draft_done)
 
-            border_w = "2px" if is_user else "1px"
-            border_s = "dashed" if is_pin else "solid"
-            border_c = P["accent"] if is_user else P["border"]
-            bg = f"{P['accent']}18" if is_user else P["panel"]
-            name_c = P["accent"] if is_user else P["text"]
-            lbl = _pick_label(pp["pick"])
-            pin_ico = " 📌" if is_pin else ""
-
-            if player:
-                pos = player.get("position", "")
-                team = player.get("team") or "FA"
-                pc_color = POS_COLOR.get(pos, P["muted"])
+            if is_on_clock:
                 cell = (
-                    f'<td style="padding:8px 9px;border-radius:8px;border:{border_w} {border_s} {border_c};'
-                    f'background:{bg};vertical-align:top;min-width:80px;">'
-                    f'<div style="font-size:0.62rem;color:{P["muted"]};margin-bottom:2px;">{lbl}{pin_ico}</div>'
-                    f'<div style="font-weight:700;font-size:0.78rem;color:{name_c};line-height:1.25;">'
-                    f'{player["full_name"]}</div>'
-                    f'<div style="font-size:0.68rem;margin-top:2px;">'
-                    f'<span style="color:{pc_color};font-weight:600;">{pos}</span>'
-                    f'<span style="color:{P["muted"]};"> · {team}</span></div>'
-                    f'</td>'
+                    f'<td style="padding:8px 9px;border-radius:8px;border:2px solid {P["accent"]};'
+                    f'background:{P["accent"]}30;vertical-align:top;min-width:80px;">'
+                    f'<div style="font-size:0.62rem;color:{P["accent"]};font-weight:700;margin-bottom:2px;">{lbl} 🟡</div>'
+                    f'<div style="font-weight:800;font-size:0.8rem;color:{P["accent"]};">YOU</div>'
+                    f'<div style="font-size:0.68rem;color:{P["accent"]};">ON THE CLOCK</div></td>'
                 )
+            elif pp:
+                player = pp.get("player")
+                is_user = pp["is_user"]
+                is_pin = pp.get("pinned", False)
+                bw = "2px" if is_user else "1px"
+                bs = "dashed" if is_pin else "solid"
+                bc = P["accent"] if is_user else P["border"]
+                bg = f"{P['accent']}18" if is_user else P["panel"]
+                nc = P["accent"] if is_user else P["text"]
+                pin_ico = " 📌" if is_pin else ""
+                if player:
+                    pos = player.get("position", "")
+                    team = player.get("team") or "FA"
+                    pc = POS_COLOR.get(pos, P["muted"])
+                    cell = (
+                        f'<td style="padding:8px 9px;border-radius:8px;border:{bw} {bs} {bc};'
+                        f'background:{bg};vertical-align:top;min-width:80px;">'
+                        f'<div style="font-size:0.62rem;color:{P["muted"]};margin-bottom:2px;">{lbl}{pin_ico}</div>'
+                        f'<div style="font-weight:700;font-size:0.78rem;color:{nc};line-height:1.25;">{player["full_name"]}</div>'
+                        f'<div style="font-size:0.68rem;margin-top:2px;">'
+                        f'<span style="color:{pc};font-weight:600;">{pos}</span>'
+                        f'<span style="color:{P["muted"]};"> · {team}</span></div></td>'
+                    )
+                else:
+                    cell = (
+                        f'<td style="padding:8px 9px;border-radius:8px;border:{bw} {bs} {bc};'
+                        f'background:{bg};vertical-align:top;">'
+                        f'<div style="font-size:0.62rem;color:{P["muted"]};">{lbl}</div>'
+                        f'<div style="font-size:0.78rem;color:{P["muted"]};">—</div></td>'
+                    )
             else:
+                # Future/empty pick
+                is_future_user = pick_n in user_picks_set
+                bc = P["accent"] if is_future_user else P["border"]
+                opacity = "0.5" if is_future_user else "0.25"
                 cell = (
-                    f'<td style="padding:8px 9px;border-radius:8px;border:{border_w} {border_s} {border_c};'
-                    f'background:{bg};vertical-align:top;">'
+                    f'<td style="padding:8px 9px;border-radius:8px;border:1px dashed {bc};'
+                    f'background:{P["panel"]}10;vertical-align:top;min-width:80px;opacity:{opacity};">'
                     f'<div style="font-size:0.62rem;color:{P["muted"]};">{lbl}</div>'
-                    f'<div style="font-size:0.78rem;color:{P["muted"]};">—</div></td>'
+                    f'<div style="font-size:0.78rem;color:{P["muted"]};">·</div></td>'
                 )
             cells += cell
 
@@ -503,37 +416,190 @@ def render_mock_draft(rookies: list):
         rows_html += f"<tr>{rnd_hdr}{cells}</tr>"
 
     st.markdown(
-        f'<div style="overflow-x:auto;margin:1.2rem 0;">'
+        f'<div style="overflow-x:auto;margin:0.8rem 0;">'
         f'<table style="border-collapse:separate;border-spacing:5px;width:100%;">'
         f'<tbody>{rows_html}</tbody></table></div>',
         unsafe_allow_html=True,
     )
 
-    # ── Your Haul ─────────────────────────────────────────────────────────────
-    st.markdown("---")
-    st.markdown("### 🏆 Your Haul")
-    haul_cols = st.columns(4)
-    for i, pp in enumerate(user_picks):
-        player = pp.get("player")
-        lbl = _pick_label(pp["pick"])
-        with haul_cols[i]:
-            with st.container(border=True):
-                st.markdown(f"**{lbl}**")
-                if player:
-                    pos = player.get("position", "")
-                    team = player.get("team") or "FA"
-                    cached = st.session_state.analysis_cache.get(player["player_id"], {})
-                    grade = cached.get("talent_grade") or cached.get("opportunity_grade")
-                    st.markdown(f"**{player['full_name']}**")
-                    st.caption(f"{pos} · {team}")
-                    if grade:
-                        st.markdown(grade_pill(grade), unsafe_allow_html=True)
-                    if st.button("🔍 Scout", key=f"haul_scout_{i}", use_container_width=True):
-                        st.session_state.selected_player = player
-                        st.session_state.view = "home"
+
+def render_mock_draft(rookies: list):
+    """Interactive turn-by-turn mock draft view."""
+    brand_bar("2026 Mock Draft Simulator")
+
+    top_l, top_r = st.columns([6, 1])
+    with top_l:
+        st.markdown("### 🎯 Mock Draft")
+    with top_r:
+        if st.button("← Back", use_container_width=True, key="mock_back"):
+            st.session_state.mock_active = False
+            st.session_state.view = "home"
+            st.rerun()
+
+    # ── Setup screen (draft not yet started) ─────────────────────────────────
+    if not st.session_state.mock_active:
+        s1, s2, s3 = st.columns([2, 3, 3])
+        with s1:
+            slot = st.selectbox(
+                "Your draft slot", list(range(1, 13)),
+                index=st.session_state.mock_slot - 1, key="mock_slot_sel",
+                help="Your position in the 12-team league",
+            )
+            st.session_state.mock_slot = slot
+        with s2:
+            variance = st.slider(
+                "Variance", 0, 5, st.session_state.mock_variance, key="mock_var_slider",
+                help="0 = pure ADP order · 5 = heavy randomness",
+            )
+            st.session_state.mock_variance = variance
+        with s3:
+            labels = "  ·  ".join(_pick_label(p) for p in _user_picks_for_slot(slot))
+            st.metric("Your picks", labels)
+
+        pin_count = len(st.session_state.mock_pins)
+        with st.expander(f"📌 Pre-set picks  ({pin_count} pinned)", expanded=bool(pin_count)):
+            if st.session_state.mock_pins:
+                for pick_num, pid in list(st.session_state.mock_pins.items()):
+                    match = next((r for r in rookies if r["player_id"] == pid), None)
+                    name_str = match["full_name"] if match else str(pid)
+                    ca, cb = st.columns([6, 1])
+                    ca.markdown(f"**{_pick_label(int(pick_num))}** → {name_str}")
+                    if cb.button("✕", key=f"rm_pin_{pick_num}"):
+                        del st.session_state.mock_pins[pick_num]
                         st.rerun()
-                else:
-                    st.caption("—")
+                st.divider()
+            rookie_names = ["(select player)"] + [r["full_name"] for r in rookies]
+            pa, pb, pc = st.columns([4, 2, 1])
+            pin_player = pa.selectbox("Player", rookie_names, key="mock_pin_player_sel")
+            pin_pick_num = pb.number_input("To pick #", 1, 48, 1, step=1, key="mock_pin_pick_num")
+            if pc.button("+ Pin", key="add_pin_btn"):
+                if pin_player != "(select player)":
+                    match = next((r for r in rookies if r["full_name"] == pin_player), None)
+                    if match:
+                        st.session_state.mock_pins[int(pin_pick_num)] = match["player_id"]
+                        st.rerun()
+
+        if st.button("▶ Start Draft", type="primary", use_container_width=True, key="start_draft_btn"):
+            _start_draft(st.session_state.mock_slot, st.session_state.mock_pins,
+                         st.session_state.mock_variance, rookies)
+            st.rerun()
+        return
+
+    # ── Active draft ──────────────────────────────────────────────────────────
+    completed   = st.session_state.mock_draft_picks
+    available   = st.session_state.mock_draft_available
+    current     = st.session_state.mock_draft_current_pick
+    user_set    = st.session_state.mock_draft_user_picks_set
+    pin_map     = st.session_state.mock_draft_pin_map
+
+    # Auto-advance all CPU picks (and auto-pinned picks) until we hit an
+    # un-pinned user pick or reach pick 49 (draft over).
+    while current <= 48:
+        is_user = current in user_set
+        if current in pin_map:
+            completed.append({"pick": current, "player": pin_map[current], "is_user": is_user, "pinned": True})
+            current += 1
+        elif is_user:
+            break   # user's turn — stop and show pick UI
+        else:
+            player = available.pop(0) if available else None
+            completed.append({"pick": current, "player": player, "is_user": False, "pinned": False})
+            current += 1
+
+    st.session_state.mock_draft_picks = completed
+    st.session_state.mock_draft_available = available
+    st.session_state.mock_draft_current_pick = current
+
+    draft_done = current > 48
+
+    # Status bar
+    hdr_l, hdr_r = st.columns([5, 1])
+    with hdr_l:
+        if draft_done:
+            st.success("✅ Draft complete!")
+        else:
+            n_user_done = sum(1 for p in completed if p["is_user"])
+            st.info(f"🟡 Pick **{current}/48** — your pick {n_user_done + 1} of {len(user_set)}")
+    with hdr_r:
+        if st.button("🔄 Restart", use_container_width=True, key="restart_draft"):
+            st.session_state.mock_active = False
+            st.rerun()
+
+    # Draft board
+    completed_map = {p["pick"]: p for p in completed}
+    _render_draft_board(completed_map, current, user_set, draft_done)
+
+    # ── Draft complete: show haul ─────────────────────────────────────────────
+    if draft_done:
+        st.markdown("---")
+        st.markdown("### 🏆 Your Haul")
+        user_picks_list = [p for p in completed if p["is_user"]]
+        haul_cols = st.columns(len(user_picks_list))
+        for i, pp in enumerate(user_picks_list):
+            player = pp.get("player")
+            lbl = _pick_label(pp["pick"])
+            with haul_cols[i]:
+                with st.container(border=True):
+                    st.markdown(f"**{lbl}**")
+                    if player:
+                        cached = st.session_state.analysis_cache.get(player["player_id"], {})
+                        grade = cached.get("talent_grade") or cached.get("opportunity_grade")
+                        st.markdown(f"**{player['full_name']}**")
+                        st.caption(f"{player.get('position','')} · {player.get('team') or 'FA'}")
+                        if grade:
+                            st.markdown(grade_pill(grade), unsafe_allow_html=True)
+                        if st.button("🔍 Scout", key=f"haul_scout_{i}", use_container_width=True):
+                            st.session_state.selected_player = player
+                            st.session_state.view = "home"
+                            st.rerun()
+                    else:
+                        st.caption("—")
+        return
+
+    # ── On the clock: pick UI ─────────────────────────────────────────────────
+    st.markdown(f"### 🟡 You're on the clock — **{_pick_label(current)}**")
+    st.caption(f"{len(available)} players remaining")
+
+    cl1, cl2 = st.columns([2, 4])
+    with cl1:
+        pos_filter = st.multiselect(
+            "Position", ["QB", "RB", "WR", "TE"],
+            default=["QB", "RB", "WR", "TE"],
+            key="mock_avail_pos", label_visibility="collapsed",
+        )
+    with cl2:
+        avail_search = st.text_input(
+            "Search", placeholder="Filter by name...",
+            key="mock_avail_search", label_visibility="collapsed",
+        )
+
+    filtered = [
+        p for p in available
+        if p.get("position") in pos_filter
+        and (not avail_search or avail_search.lower() in p["full_name"].lower())
+    ]
+
+    if filtered:
+        avail_df = pd.DataFrame([{
+            "Name": p["full_name"],
+            "Pos": p.get("position", ""),
+            "Team": p.get("team") or "FA",
+            "College": p.get("college") or "—",
+        } for p in filtered[:30]])
+        st.dataframe(avail_df, hide_index=True, use_container_width=True, height=260)
+
+        sel_name = st.selectbox("Select your pick", [p["full_name"] for p in filtered], key="mock_user_pick_sel")
+        if st.button("✓ Make Pick", type="primary", use_container_width=True, key="make_pick_btn"):
+            chosen = next((p for p in available if p["full_name"] == sel_name), None)
+            if chosen:
+                completed.append({"pick": current, "player": chosen, "is_user": True, "pinned": False})
+                available.remove(chosen)
+                st.session_state.mock_draft_picks = completed
+                st.session_state.mock_draft_available = available
+                st.session_state.mock_draft_current_pick = current + 1
+                st.rerun()
+    else:
+        st.warning("No players match the filter.")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -558,9 +624,19 @@ if "mock_slot" not in st.session_state:
 if "mock_variance" not in st.session_state:
     st.session_state.mock_variance = 2
 if "mock_pins" not in st.session_state:
-    st.session_state.mock_pins = {}   # {overall_pick_int: player_id_str}
-if "mock_result" not in st.session_state:
-    st.session_state.mock_result = None
+    st.session_state.mock_pins = {}       # {overall_pick_int: player_id_str}
+if "mock_active" not in st.session_state:
+    st.session_state.mock_active = False
+if "mock_draft_picks" not in st.session_state:
+    st.session_state.mock_draft_picks = []
+if "mock_draft_available" not in st.session_state:
+    st.session_state.mock_draft_available = []
+if "mock_draft_current_pick" not in st.session_state:
+    st.session_state.mock_draft_current_pick = 1
+if "mock_draft_pin_map" not in st.session_state:
+    st.session_state.mock_draft_pin_map = {}
+if "mock_draft_user_picks_set" not in st.session_state:
+    st.session_state.mock_draft_user_picks_set = set()
 
 # ── Data loading ──────────────────────────────────────────────────────────────
 
@@ -738,12 +814,19 @@ if st.session_state.selected_player is None:
     # ── Mock Draft card ───────────────────────────────────────────────────────
     with st.container(border=True):
         st.markdown("### 🎯 Mock Draft Simulator")
-        sim_result = st.session_state.mock_result
-        if sim_result:
-            haul = [p["player"]["full_name"] for p in sim_result["user_picks"] if p.get("player")]
-            st.caption("Last sim haul: " + "  ·  ".join(haul))
+        if st.session_state.mock_active:
+            n_done = len(st.session_state.mock_draft_picks)
+            cur = st.session_state.mock_draft_current_pick
+            if cur > 48:
+                haul = [
+                    p["player"]["full_name"] for p in st.session_state.mock_draft_picks
+                    if p["is_user"] and p.get("player")
+                ]
+                st.caption("Draft complete · Haul: " + "  ·  ".join(haul))
+            else:
+                st.caption(f"Draft in progress — pick {cur}/48")
         else:
-            st.caption("Simulate your draft — set your slot, pin known picks, and see who falls to you.")
+            st.caption("Pick live, turn-by-turn — set your slot, pin known picks, then go on the clock.")
         if st.button("Open Mock Draft →", use_container_width=True, key="open_mock"):
             st.session_state.view = "mock"
             st.rerun()
