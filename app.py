@@ -595,47 +595,51 @@ def render_mock_draft(rookies: list):
     if not filtered:
         st.warning("No players match the filter.")
     else:
-        POS_COLOR_MAP = {"QB": "#3b82f6", "RB": "#3fb950", "WR": "#e8b84b", "TE": "#e3873c"}
+        POS_ICON  = {"QB": "🟦", "RB": "🟩", "WR": "🟨", "TE": "🟧"}
 
-        # Table header
-        hc = st.columns([5, 1, 2, 2])
-        for label, col in zip(["Player", "Pos", "Team", "College"], hc):
-            col.markdown(
-                f"<span style='font-size:0.72rem;font-weight:700;color:{P['muted']};"
-                f"text-transform:uppercase;letter-spacing:0.05em;'>{label}</span>",
-                unsafe_allow_html=True,
-            )
+        # Column headers (HTML — stays horizontal on mobile)
         st.markdown(
-            f"<hr style='margin:2px 0 6px 0;border:none;border-top:1px solid {P['border']};'>",
+            f"<div style='display:grid;grid-template-columns:1fr 48px 52px 1fr;gap:0 8px;"
+            f"padding:0 4px 4px 4px;'>"
+            f"<span style='font-size:0.72rem;font-weight:700;color:{P['muted']};text-transform:uppercase;letter-spacing:.05em;'>Player</span>"
+            f"<span style='font-size:0.72rem;font-weight:700;color:{P['muted']};text-transform:uppercase;letter-spacing:.05em;'>Pos</span>"
+            f"<span style='font-size:0.72rem;font-weight:700;color:{P['muted']};text-transform:uppercase;letter-spacing:.05em;'>Team</span>"
+            f"<span style='font-size:0.72rem;font-weight:700;color:{P['muted']};text-transform:uppercase;letter-spacing:.05em;'>College</span>"
+            f"</div>"
+            f"<hr style='margin:0 0 4px 0;border:none;border-top:1px solid {P['border']};'>",
             unsafe_allow_html=True,
         )
 
-        for i, p in enumerate(filtered[:30]):
-            pos = p.get("position", "")
-            team = p.get("team") or "FA"
-            college = p.get("college") or "—"
-            pc = POS_COLOR_MAP.get(pos, P["muted"])
+        POS_COLOR_MAP = {"QB": "#3b82f6", "RB": "#3fb950", "WR": "#e8b84b", "TE": "#e3873c"}
 
-            rc = st.columns([5, 1, 2, 2])
-            if rc[0].button(p["full_name"], key=f"pick_row_{i}", use_container_width=True):
+        for i, p in enumerate(filtered[:30]):
+            pos   = p.get("position", "")
+            team  = p.get("team") or "FA"
+            college = p.get("college") or "—"
+            icon  = POS_ICON.get(pos, "⬜")
+            pc    = POS_COLOR_MAP.get(pos, P["muted"])
+
+            # Each row: two columns — info block (HTML) + invisible pick trigger
+            left, right = st.columns([6, 1])
+
+            left.markdown(
+                f"<div style='display:grid;grid-template-columns:1fr 48px 52px 1fr;gap:0 8px;"
+                f"align-items:center;padding:6px 4px;border-bottom:1px solid {P['border']};'>"
+                f"<span style='font-weight:700;font-size:0.88rem;color:{P['text']};'>{icon} {p['full_name']}</span>"
+                f"<span style='font-weight:700;font-size:0.85rem;color:{pc};'>{pos}</span>"
+                f"<span style='font-size:0.85rem;color:{P['text']};'>{team}</span>"
+                f"<span style='font-size:0.8rem;color:{P['muted']};'>{college}</span>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+
+            if right.button("Pick", key=f"pick_row_{i}", use_container_width=True):
                 completed.append({"pick": current, "player": p, "is_user": True, "pinned": False})
                 available.remove(p)
                 st.session_state.mock_draft_picks = completed
                 st.session_state.mock_draft_available = available
                 st.session_state.mock_draft_current_pick = current + 1
                 st.rerun()
-            rc[1].markdown(
-                f"<span style='color:{pc};font-weight:700;line-height:2.2;'>{pos}</span>",
-                unsafe_allow_html=True,
-            )
-            rc[2].markdown(
-                f"<span style='line-height:2.2;'>{team}</span>",
-                unsafe_allow_html=True,
-            )
-            rc[3].markdown(
-                f"<span style='font-size:0.82rem;color:{P['muted']};line-height:2.2;'>{college}</span>",
-                unsafe_allow_html=True,
-            )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
