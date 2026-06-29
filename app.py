@@ -570,7 +570,6 @@ def render_mock_draft(rookies: list):
 
     # ── On the clock: pick UI ─────────────────────────────────────────────────
     st.markdown(f"### 🟡 You're on the clock — **{_pick_label(current)}**")
-    st.caption(f"{len(available)} players remaining")
 
     cl1, cl2 = st.columns([2, 4])
     with cl1:
@@ -591,44 +590,25 @@ def render_mock_draft(rookies: list):
         and (not avail_search or avail_search.lower() in p["full_name"].lower())
     ]
 
-    if filtered:
-        avail_df = pd.DataFrame([{
-            "Name": p["full_name"],
-            "Pos": p.get("position", ""),
-            "Team": p.get("team") or "FA",
-            "College": p.get("college") or "—",
-        } for p in filtered[:30]])
+    st.caption(f"{len(filtered)} available · click a name to draft")
 
-        event = st.dataframe(
-            avail_df,
-            on_select="rerun",
-            selection_mode="single-row",
-            hide_index=True,
-            use_container_width=True,
-            height=260,
-            key="mock_avail_table",
-        )
-
-        pick_names = [p["full_name"] for p in filtered]
-
-        # Sync row click → selectbox
-        if event.selection.rows:
-            row_idx = event.selection.rows[0]
-            if row_idx < len(filtered):
-                st.session_state.mock_user_pick_sel = filtered[row_idx]["full_name"]
-
-        sel_name = st.selectbox("Select your pick", pick_names, key="mock_user_pick_sel")
-        if st.button("✓ Make Pick", type="primary", use_container_width=True, key="make_pick_btn"):
-            chosen = next((p for p in available if p["full_name"] == sel_name), None)
-            if chosen:
-                completed.append({"pick": current, "player": chosen, "is_user": True, "pinned": False})
-                available.remove(chosen)
+    if not filtered:
+        st.warning("No players match the filter.")
+    else:
+        POS_ICON = {"QB": "🟦", "RB": "🟩", "WR": "🟨", "TE": "🟧"}
+        cols = st.columns(3)
+        for i, p in enumerate(filtered[:30]):
+            pos = p.get("position", "")
+            team = p.get("team") or "FA"
+            icon = POS_ICON.get(pos, "⬜")
+            label = f"{icon} **{p['full_name']}** · {pos} · {team}"
+            if cols[i % 3].button(label, key=f"pick_tile_{i}", use_container_width=True):
+                completed.append({"pick": current, "player": p, "is_user": True, "pinned": False})
+                available.remove(p)
                 st.session_state.mock_draft_picks = completed
                 st.session_state.mock_draft_available = available
                 st.session_state.mock_draft_current_pick = current + 1
                 st.rerun()
-    else:
-        st.warning("No players match the filter.")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
