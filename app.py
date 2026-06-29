@@ -82,9 +82,13 @@ st.markdown(
     <style>
       @import url('https://fonts.googleapis.com/css2?family=SN+Pro:ital,wght@0,300;0,400;0,600;0,700;0,800;1,400&display=swap');
 
-      /* Typeface — SN Pro everywhere */
+      /* Typeface — SN Pro on text content; intentionally excludes
+         [class*="st-"] and bare [data-testid] to avoid clobbering
+         Streamlit's internal Material Symbols icon font. */
       html, body, .stApp, button, input, textarea, select,
-      [class*="st-"], [data-testid] {{
+      [data-testid="stMarkdownContainer"],
+      [data-testid="stText"],
+      [data-testid="stWidgetLabel"] {{
         font-family: 'SN Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
       }}
 
