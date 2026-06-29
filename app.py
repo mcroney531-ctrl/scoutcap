@@ -984,6 +984,25 @@ player = st.session_state.selected_player
 pid = player["player_id"]
 name = player["full_name"]
 
+# Collapse the sidebar immediately when a player is opened.
+# sessionStorage (browser-side) prevents re-toggling on Streamlit rerenders
+# while still allowing the user to manually re-open the sidebar.
+import streamlit.components.v1 as _components
+_components.html(
+    f"""<script>
+    try {{
+        var key = 'sbCollapsed_{pid}';
+        if (!sessionStorage.getItem(key)) {{
+            var sb = window.parent.document.querySelector('section[data-testid="stSidebar"]');
+            if (sb && sb.getBoundingClientRect().width > 50) {{
+                var btn = sb.querySelector('button');
+                if (btn) {{ btn.click(); sessionStorage.setItem(key, '1'); }}
+            }}
+        }}
+    }} catch(e) {{}}
+    </script>""",
+    height=0, scrolling=False,
+)
 
 # ── Player header ─────────────────────────────────────────────────────────────
 
@@ -1023,19 +1042,6 @@ if pid not in st.session_state.analysis_cache:
         if pid not in st.session_state.chat_history:
             st.session_state.chat_history[pid] = []
         progress.empty()
-        # Collapse sidebar now that the analysis is done and page is stable.
-        import streamlit.components.v1 as _components
-        _components.html(
-            """<script>
-            try {
-                const sb = window.parent.document.querySelector('section[data-testid="stSidebar"]');
-                if (sb && sb.getBoundingClientRect().width > 150) {
-                    sb.querySelector('button')?.click();
-                }
-            } catch(e) {}
-            </script>""",
-            height=0, scrolling=False,
-        )
     except Exception as e:
         progress.empty()
         st.error(f"Pipeline error: {e}")
