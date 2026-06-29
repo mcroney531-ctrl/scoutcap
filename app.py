@@ -2,7 +2,7 @@
 Rookie Draft Scouting Agent — Streamlit frontend
 """
 
-import os, sys, asyncio, json, random
+import os, sys, asyncio, json, random, time
 sys.path.insert(0, os.path.dirname(__file__))
 
 # Fall back to .env for local dev
@@ -492,19 +492,20 @@ def render_mock_draft(rookies: list):
     user_set    = st.session_state.mock_draft_user_picks_set
     pin_map     = st.session_state.mock_draft_pin_map
 
-    # Auto-advance all CPU picks (and auto-pinned picks) until we hit an
-    # un-pinned user pick or reach pick 49 (draft over).
-    while current <= 48:
+    # Process ONE pick per render: CPU/pinned picks animate in one at a time.
+    # Stops when we hit an un-pinned user pick or the draft ends.
+    animating = False
+    if current <= 48:
         is_user = current in user_set
         if current in pin_map:
             completed.append({"pick": current, "player": pin_map[current], "is_user": is_user, "pinned": True})
             current += 1
-        elif is_user:
-            break   # user's turn — stop and show pick UI
-        else:
+            animating = True
+        elif not is_user:
             player = available.pop(0) if available else None
             completed.append({"pick": current, "player": player, "is_user": False, "pinned": False})
             current += 1
+            animating = True
 
     st.session_state.mock_draft_picks = completed
     st.session_state.mock_draft_available = available
@@ -517,6 +518,8 @@ def render_mock_draft(rookies: list):
     with hdr_l:
         if draft_done:
             st.success("✅ Draft complete!")
+        elif animating:
+            st.info(f"⏳ Pick **{current - 1}/48** — other teams picking...")
         else:
             n_user_done = sum(1 for p in completed if p["is_user"])
             st.info(f"🟡 Pick **{current}/48** — your pick {n_user_done + 1} of {len(user_set)}")
@@ -525,9 +528,14 @@ def render_mock_draft(rookies: list):
             st.session_state.mock_active = False
             st.rerun()
 
-    # Draft board
+    # Draft board (rendered with the pick we just added, before the next rerun)
     completed_map = {p["pick"]: p for p in completed}
-    _render_draft_board(completed_map, current, user_set, draft_done)
+    _render_draft_board(completed_map, current if not draft_done else 999, user_set, draft_done)
+
+    # ── Still animating CPU picks — sleep then trigger next pick ─────────────
+    if animating and not draft_done:
+        time.sleep(0.25)
+        st.rerun()
 
     # ── Draft complete: show haul ─────────────────────────────────────────────
     if draft_done:
