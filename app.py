@@ -882,20 +882,6 @@ player = st.session_state.selected_player
 pid = player["player_id"]
 name = player["full_name"]
 
-# Auto-collapse sidebar when a player is opened (fires once per player).
-if st.session_state.get("_sidebar_collapsed_for") != pid:
-    st.session_state["_sidebar_collapsed_for"] = pid
-    import streamlit.components.v1 as _components
-    _components.html(
-        """<script>
-        try {
-            const sb = window.parent.document.querySelector('section[data-testid="stSidebar"]');
-            if (sb) { const btn = sb.querySelector('button'); if (btn) btn.click(); }
-        } catch(e) {}
-        </script>""",
-        height=0,
-        scrolling=False,
-    )
 
 # ── Player header ─────────────────────────────────────────────────────────────
 
@@ -935,6 +921,19 @@ if pid not in st.session_state.analysis_cache:
         if pid not in st.session_state.chat_history:
             st.session_state.chat_history[pid] = []
         progress.empty()
+        # Collapse sidebar now that the analysis is done and page is stable.
+        import streamlit.components.v1 as _components
+        _components.html(
+            """<script>
+            try {
+                const sb = window.parent.document.querySelector('section[data-testid="stSidebar"]');
+                if (sb && sb.getBoundingClientRect().width > 150) {
+                    sb.querySelector('button')?.click();
+                }
+            } catch(e) {}
+            </script>""",
+            height=0, scrolling=False,
+        )
     except Exception as e:
         progress.empty()
         st.error(f"Pipeline error: {e}")

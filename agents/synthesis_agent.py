@@ -54,10 +54,15 @@ def evaluate_production(player_name: str) -> dict:
 
 def get_my_roster_needs() -> dict:
     """
-    Pull current roster from Sleeper and assess positional needs.
-    Returns roster composition by position and a ranked need list.
+    Pull current roster from Sleeper and assess positional needs using
+    FantasyCalc dynasty values to grade each player's quality.
+
+    A position stacked with D/F-grade players still registers as a HIGH need —
+    headcount alone is not enough. The need score combines depth deficit with
+    a quality deficit so that 11 worthless RBs scores the same as 2 RBs.
     """
-    import os
+    from tools.fantasycalc import _load as _fc_load, value_grade as _value_grade
+
     username = os.getenv("SLEEPER_USERNAME")
     league_id = os.getenv("SLEEPER_LEAGUE_ID")
 
@@ -65,43 +70,91 @@ def get_my_roster_needs() -> dict:
     rosters = get_rosters(league_id)
     users = get_users_in_league(league_id)
 
-    uid_to_name = {u["user_id"]: u.get("display_name") for u in users}
     my_roster = next(
         (r for r in rosters if r.get("owner_id") == user["user_id"]), None
     )
-
     if not my_roster:
         return {"error": "Could not find your roster in this league"}
 
     all_players = get_nfl_players()
+    fc = _fc_load()
     player_ids = my_roster.get("players") or []
 
-    by_position: dict[str, list] = {"QB": [], "RB": [], "WR": [], "TE": [], "Other": []}
+    by_position: dict[str, list] = {"QB": [], "RB": [], "WR": [], "TE": []}
+
     for pid in player_ids:
         p = all_players.get(pid, {})
-        pos = p.get("position", "Other")
-        name = p.get("full_name", pid)
-        years = p.get("years_exp", 0)
-        if pos in by_position:
-            by_position[pos].append({"name": name, "years_exp": years, "player_id": pid})
-        else:
-            by_position["Other"].append({"name": name, "years_exp": years})
+        pos = p.get("position", "")
+        if pos not in by_position:
+            continue
+        fc_rec = fc.get(str(pid))
+        dynasty_value  = fc_rec["dynasty_value"]   if fc_rec else 0
+        dynasty_rank   = fc_rec.get("dynasty_pos_rank") if fc_rec else None
+        grade = _value_grade(pos, dynasty_rank)    # reuse same tier thresholds
+        by_position[pos].append({
+            "name": p.get("full_name", pid),
+            "years_exp": p.get("years_exp", 0),
+            "player_id": pid,
+            "dynasty_value": dynasty_value,
+            "grade": grade,
+        })
 
-    # Simple need scoring: fewer players + fewer young players = higher need
+    # How many real starters the format demands at each position
+    starter_targets = {"QB": 2, "RB": 4, "WR": 4, "TE": 2}
+    depth_targets   = {"QB": 3, "RB": 8, "WR": 8, "TE": 3}
+    grade_map = {"A": 4, "B": 3, "C": 2, "D": 1, "F": 0}
+
     needs = {}
-    targets = {"QB": 3, "RB": 8, "WR": 8, "TE": 3}
-    for pos, target in targets.items():
-        count = len(by_position[pos])
-        young = sum(1 for p in by_position[pos] if p["years_exp"] <= 2)
-        need_score = max(0, (target - count) * 2 + max(0, 3 - young))
-        needs[pos] = {"count": count, "young_count": young, "need_score": need_score}
+    for pos in ("QB", "RB", "WR", "TE"):
+        players = sorted(by_position[pos], key=lambda x: x["dynasty_value"], reverse=True)
+        count   = len(players)
+        starters = players[:starter_targets[pos]]
+
+        # Starter quality: average grade of the top-N by dynasty value (0-100 scale)
+        if starters:
+            avg_grade_num = sum(grade_map.get(p["grade"], 0) for p in starters) / len(starters)
+            starter_quality = (avg_grade_num / 4) * 100
+        else:
+            starter_quality = 0
+
+        real_contributors = [p for p in players if p["grade"] in ("A", "B", "C")]
+        replaceable       = [p for p in players if p["grade"] in ("D", "F")]
+
+        # Need = depth shortfall + quality shortfall (so 11 D/F RBs still = high need)
+        depth_need       = max(0, depth_targets[pos] - count) * 3
+        quality_deficit  = max(0, 65 - starter_quality)       # 0 when starters are solid
+        need_score       = depth_need + quality_deficit / 10
+
+        needs[pos] = {
+            "count": count,
+            "real_contributors": len(real_contributors),
+            "replaceable_count": len(replaceable),
+            "starter_quality_score": round(starter_quality, 1),
+            "need_score": round(need_score, 1),
+            "top_players": [{"name": p["name"], "grade": p["grade"]} for p in players[:5]],
+            "replaceable_names": [p["name"] for p in replaceable[:5]],
+        }
 
     ranked = sorted(needs.items(), key=lambda x: -x[1]["need_score"])
     return {
-        "roster_by_position": {k: v for k, v in by_position.items() if k != "Other"},
+        "roster_by_position": {
+            pos: {
+                "count": needs[pos]["count"],
+                "top_players": needs[pos]["top_players"],
+                "real_contributors": needs[pos]["real_contributors"],
+                "replaceable_count": needs[pos]["replaceable_count"],
+                "starter_quality_score": needs[pos]["starter_quality_score"],
+            }
+            for pos in ("QB", "RB", "WR", "TE")
+        },
         "needs": needs,
         "ranked_needs": [pos for pos, _ in ranked],
-        "note": "Need score = (target depth - current count) * 2 + young player deficit",
+        "note": (
+            "Need score is QUALITY-WEIGHTED via FantasyCalc dynasty grades. "
+            "starter_quality_score 0-100: how good are the starters at this position? "
+            "A score below 50 means real need even if headcount looks fine. "
+            "replaceable_count = players graded D/F (minimal dynasty value)."
+        ),
     }
 
 
@@ -272,9 +325,13 @@ The score → pick mapping is non-linear: elite prospects compress into round 1 
 apart), while weaker grades flatten into rounds 3-4 — so small composite gaps at the top
 matter far more than the same gap in the late rounds.
 
-Roster need context: use it as a modifier on your narrative recommendation — a player at a
-position of high need is worth paying up for (mention this). A position of low need means
-you might let this player fall or skip entirely.
+Roster need context: CRITICAL — need is QUALITY-WEIGHTED via FantasyCalc dynasty grades,
+not raw headcount. "11 RBs" means nothing if 9 of them are grade F. Look at
+starter_quality_score (0-100): below 50 = real need even if count looks fine. Also check
+real_contributors (grade A/B/C players) and replaceable_count (grade D/F). Mention specific
+player names from top_players when explaining positional strength or weakness. A high-count
+position with low starter_quality is still a need — call it out directly (e.g. "you have 11
+RBs but only 1 real contributor — this is a high-need position despite the depth count").
 
 Sentiment note: if overall platform activity is low, say so and treat sentiment as color only.
 
@@ -321,7 +378,7 @@ Output format — return a JSON object with these exact keys:
   "ceiling_pick": "1.03",
   "recommended_pick": "1.09",
   "roster_need": "HIGH / MODERATE / LOW",
-  "roster_need_note": "One sentence on how roster context affects this pick for you specifically.",
+  "roster_need_note": "One sentence referencing actual roster quality (starter_quality_score, top players, real_contributors) — e.g. 'Your RB room has 11 players but only 1 grade-B contributor; this is a real need'.",
   "headline": "Talent: A- / Opportunity: C+ → Floor: 2.08, Ceiling: 1.03 → Recommended: 1.09",
   "narrative": "3-4 sentence synthesis of why this player grades where they do, what the tension is between talent and opportunity, and what scenario would push them toward ceiling vs. floor.",
   "ktc_comparison": "One sentence comparing to KTC dynasty consensus or noting lack of data.",
