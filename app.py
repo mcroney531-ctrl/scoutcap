@@ -882,6 +882,21 @@ player = st.session_state.selected_player
 pid = player["player_id"]
 name = player["full_name"]
 
+# Auto-collapse sidebar when a player is opened (fires once per player).
+if st.session_state.get("_sidebar_collapsed_for") != pid:
+    st.session_state["_sidebar_collapsed_for"] = pid
+    import streamlit.components.v1 as _components
+    _components.html(
+        """<script>
+        try {
+            const sb = window.parent.document.querySelector('section[data-testid="stSidebar"]');
+            if (sb) { const btn = sb.querySelector('button'); if (btn) btn.click(); }
+        } catch(e) {}
+        </script>""",
+        height=0,
+        scrolling=False,
+    )
+
 # ── Player header ─────────────────────────────────────────────────────────────
 
 brand_bar("Scouting report")
