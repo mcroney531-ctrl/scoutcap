@@ -595,20 +595,47 @@ def render_mock_draft(rookies: list):
     if not filtered:
         st.warning("No players match the filter.")
     else:
-        POS_ICON = {"QB": "🟦", "RB": "🟩", "WR": "🟨", "TE": "🟧"}
-        cols = st.columns(3)
+        POS_COLOR_MAP = {"QB": "#3b82f6", "RB": "#3fb950", "WR": "#e8b84b", "TE": "#e3873c"}
+
+        # Table header
+        hc = st.columns([5, 1, 2, 2])
+        for label, col in zip(["Player", "Pos", "Team", "College"], hc):
+            col.markdown(
+                f"<span style='font-size:0.72rem;font-weight:700;color:{P['muted']};"
+                f"text-transform:uppercase;letter-spacing:0.05em;'>{label}</span>",
+                unsafe_allow_html=True,
+            )
+        st.markdown(
+            f"<hr style='margin:2px 0 6px 0;border:none;border-top:1px solid {P['border']};'>",
+            unsafe_allow_html=True,
+        )
+
         for i, p in enumerate(filtered[:30]):
             pos = p.get("position", "")
             team = p.get("team") or "FA"
-            icon = POS_ICON.get(pos, "⬜")
-            label = f"{icon} **{p['full_name']}** · {pos} · {team}"
-            if cols[i % 3].button(label, key=f"pick_tile_{i}", use_container_width=True):
+            college = p.get("college") or "—"
+            pc = POS_COLOR_MAP.get(pos, P["muted"])
+
+            rc = st.columns([5, 1, 2, 2])
+            if rc[0].button(p["full_name"], key=f"pick_row_{i}", use_container_width=True):
                 completed.append({"pick": current, "player": p, "is_user": True, "pinned": False})
                 available.remove(p)
                 st.session_state.mock_draft_picks = completed
                 st.session_state.mock_draft_available = available
                 st.session_state.mock_draft_current_pick = current + 1
                 st.rerun()
+            rc[1].markdown(
+                f"<span style='color:{pc};font-weight:700;line-height:2.2;'>{pos}</span>",
+                unsafe_allow_html=True,
+            )
+            rc[2].markdown(
+                f"<span style='line-height:2.2;'>{team}</span>",
+                unsafe_allow_html=True,
+            )
+            rc[3].markdown(
+                f"<span style='font-size:0.82rem;color:{P['muted']};line-height:2.2;'>{college}</span>",
+                unsafe_allow_html=True,
+            )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
