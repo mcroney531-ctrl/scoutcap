@@ -598,9 +598,26 @@ def render_mock_draft(rookies: list):
             "Team": p.get("team") or "FA",
             "College": p.get("college") or "—",
         } for p in filtered[:30]])
-        st.dataframe(avail_df, hide_index=True, use_container_width=True, height=260)
 
-        sel_name = st.selectbox("Select your pick", [p["full_name"] for p in filtered], key="mock_user_pick_sel")
+        event = st.dataframe(
+            avail_df,
+            on_select="rerun",
+            selection_mode="single-row",
+            hide_index=True,
+            use_container_width=True,
+            height=260,
+            key="mock_avail_table",
+        )
+
+        pick_names = [p["full_name"] for p in filtered]
+
+        # Sync row click → selectbox
+        if event.selection.rows:
+            row_idx = event.selection.rows[0]
+            if row_idx < len(filtered):
+                st.session_state.mock_user_pick_sel = filtered[row_idx]["full_name"]
+
+        sel_name = st.selectbox("Select your pick", pick_names, key="mock_user_pick_sel")
         if st.button("✓ Make Pick", type="primary", use_container_width=True, key="make_pick_btn"):
             chosen = next((p for p in available if p["full_name"] == sel_name), None)
             if chosen:
