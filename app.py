@@ -175,6 +175,89 @@ st.markdown(
 )
 
 
+# Neumorphic layer — light mode only.
+# Shadow pair calibrated to #f7faff:  dark → #cdd1e0  |  light → #ffffff
+# Sidebar shadow pair for #eaeef5:     dark → #c4c8d3  |  light → #ffffff
+if _light:
+    st.markdown(
+        """<style>
+        /* ── Buttons ── */
+        .stButton > button {
+          background: #f7faff !important;
+          border: none !important;
+          border-radius: 12px !important;
+          color: #212F52 !important;
+          font-weight: 600 !important;
+          box-shadow: 5px 5px 12px #cdd1e0, -5px -5px 12px #ffffff !important;
+          transition: box-shadow 0.15s ease, transform 0.12s ease !important;
+        }
+        .stButton > button:hover {
+          box-shadow: 3px 3px 8px #cdd1e0, -3px -3px 8px #ffffff !important;
+          transform: translateY(-1px);
+        }
+        .stButton > button:active {
+          box-shadow: inset 3px 3px 7px #cdd1e0, inset -3px -3px 7px #ffffff !important;
+          transform: translateY(0);
+        }
+
+        /* ── Sidebar draft-board buttons (base = sidebar_bg #eaeef5) ── */
+        section[data-testid="stSidebar"] .stButton > button {
+          background: #eaeef5 !important;
+          border: none !important;
+          box-shadow: 3px 3px 8px #c4c8d3, -3px -3px 8px #ffffff !important;
+        }
+        section[data-testid="stSidebar"] .stButton > button:hover {
+          background: #eaeef5 !important;
+          box-shadow: 2px 2px 5px #c4c8d3, -2px -2px 5px #ffffff !important;
+        }
+        section[data-testid="stSidebar"] .stButton > button:active {
+          box-shadow: inset 2px 2px 5px #c4c8d3, inset -2px -2px 5px #ffffff !important;
+        }
+
+        /* ── Inputs and textareas — inset / recessed ── */
+        .stApp input, .stApp textarea,
+        .stApp [data-baseweb="input"],
+        .stApp [data-baseweb="textarea"] {
+          background: #f7faff !important;
+          border: none !important;
+          border-radius: 10px !important;
+          box-shadow: inset 3px 3px 7px #cdd1e0, inset -3px -3px 7px #ffffff !important;
+        }
+
+        /* ── Select / dropdowns — inset ── */
+        .stApp [data-baseweb="select"] > div {
+          background: #f7faff !important;
+          border: none !important;
+          border-radius: 10px !important;
+          box-shadow: inset 3px 3px 7px #cdd1e0, inset -3px -3px 7px #ffffff !important;
+        }
+
+        /* ── Metric cards — outset / raised ── */
+        div[data-testid="stMetric"] {
+          background: #f7faff !important;
+          border: none !important;
+          border-radius: 14px !important;
+          box-shadow: 6px 6px 14px #cdd1e0, -6px -6px 14px #ffffff !important;
+        }
+
+        /* ── Expanders — outset / raised ── */
+        div[data-testid="stExpander"] {
+          background: #f7faff !important;
+          border: none !important;
+          border-radius: 12px !important;
+          box-shadow: 5px 5px 12px #cdd1e0, -5px -5px 12px #ffffff !important;
+          overflow: hidden;
+        }
+
+        /* ── Toggle widget ── */
+        div[data-testid="stToggle"] > label {
+          gap: 0.5rem;
+        }
+        </style>""",
+        unsafe_allow_html=True,
+    )
+
+
 def grade_color(grade: str) -> str:
     """Map a letter grade to a color for badge tinting."""
     if not grade or grade == "—":
