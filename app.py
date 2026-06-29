@@ -61,7 +61,7 @@ PALETTES = {
         "grade_c": "#e8b84b",
     },
     "light": {
-        "app_bg": "#f4f6fa",
+        "app_bg": "#f7faff",
         "sidebar_bg": "#eaeef5",
         "panel": "#ffffff",
         "panel_2": "#eef1f6",
@@ -74,7 +74,7 @@ PALETTES = {
     },
 }
 
-_light = st.session_state.get("ui_light_mode", False)
+_light = st.session_state.get("ui_light_mode", True)
 P = PALETTES["light"] if _light else PALETTES["dark"]
 
 st.markdown(
@@ -155,6 +155,20 @@ st.markdown(
       /* Expander */
       details summary {{ font-weight: 700; }}
       div[data-testid="stExpander"] {{ border-color: {P['border']}; }}
+
+      /* Info / alert boxes — navy background, white text in both modes */
+      div[data-testid="stAlert"] {{
+        background-color: {NAVY} !important;
+        border-color: {NAVY} !important;
+        border-radius: 8px;
+      }}
+      div[data-testid="stAlert"] p,
+      div[data-testid="stAlert"] span,
+      div[data-testid="stAlert"] [data-testid="stMarkdownContainer"],
+      div[data-testid="stAlert"] [data-testid="stMarkdownContainer"] * {{
+        color: #ffffff !important;
+      }}
+      div[data-testid="stAlert"] svg {{ fill: #ffffff !important; }}
     </style>
     """,
     unsafe_allow_html=True,
@@ -708,7 +722,7 @@ def load_rookies():
 with st.sidebar:
     st.markdown("## 🏈 2026 Rookie Draft Board")
 
-    st.toggle("☀️ Light mode", key="ui_light_mode", help="Switch between the navy dark theme and a light theme")
+    st.toggle("☀️ Light mode", key="ui_light_mode", value=True, help="Toggle between light (default) and dark navy theme")
 
     if st.button("🎯 Mock Draft", use_container_width=True, key="sidebar_mock"):
         st.session_state.view = "mock"
