@@ -435,7 +435,7 @@ def render_mock_draft(rookies: list):
     with top_l:
         st.markdown("### 🎯 Mock Draft")
     with top_r:
-        if st.button("← Back", use_container_width=True, key="mock_back"):
+        if st.button("🏠", use_container_width=True, key="mock_back"):
             st.session_state.mock_active = False
             st.session_state.view = "home"
             st.rerun()
