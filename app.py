@@ -169,6 +169,11 @@ st.markdown(
         color: #ffffff !important;
       }}
       div[data-testid="stAlert"] svg {{ fill: #ffffff !important; }}
+
+      /* Multiselect tag pills — navy bg from primaryColor needs white text */
+      [data-baseweb="tag"] {{ background-color: {NAVY} !important; }}
+      [data-baseweb="tag"] span {{ color: #ffffff !important; }}
+      [data-baseweb="tag"] svg {{ fill: #ffffff !important; color: #ffffff !important; }}
     </style>
     """,
     unsafe_allow_html=True,
