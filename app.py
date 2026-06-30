@@ -810,6 +810,15 @@ def load_rookies():
 with st.sidebar:
     st.markdown("## 🏈 2026 Rookie Draft Board")
 
+    # Home nav — hidden target for the floating FAB; also usable directly from sidebar
+    _on_home = (st.session_state.get("view", "home") == "home"
+                and not st.session_state.get("selected_player"))
+    if not _on_home:
+        if st.button("🏠 Home", key="sidebar_home_nav", use_container_width=True):
+            st.session_state.selected_player = None
+            st.session_state.view = "home"
+            st.rerun()
+
     st.toggle("☀️ Light mode", key="ui_light_mode", value=True, help="Toggle between light (default) and dark navy theme")
 
     if st.button("🎯 Mock Draft", use_container_width=True, key="sidebar_mock"):
@@ -906,6 +915,77 @@ if st.session_state.view == "board":
         render_prospect_table(tracked, "board")
     st.stop()
 
+
+# ── Floating home button (FAB) ────────────────────────────────────────────────
+# Injected into the parent document once. Clicks the sidebar home button so
+# Streamlit handles the navigation — works even when the sidebar is collapsed.
+if not _on_home:
+    import streamlit.components.v1 as _components
+    _components.html(
+        """<script>
+        (function() {
+            var p = window.parent.document;
+            if (p.getElementById('scout-home-fab')) return;
+            var fab = p.createElement('button');
+            fab.id = 'scout-home-fab';
+            fab.title = 'Go home';
+            fab.textContent = '🏠';
+            fab.style.cssText = [
+                'position:fixed',
+                'top:0.65rem',
+                'right:3.75rem',
+                'z-index:999999',
+                'width:2.2rem',
+                'height:2.2rem',
+                'border-radius:50%',
+                'border:none',
+                'background:#212F52',
+                'color:#fff',
+                'font-size:1rem',
+                'cursor:pointer',
+                'box-shadow:2px 4px 12px rgba(33,47,82,0.35)',
+                'display:flex',
+                'align-items:center',
+                'justify-content:center',
+                'transition:transform 0.12s ease,box-shadow 0.12s ease',
+                'line-height:1'
+            ].join(';');
+            fab.addEventListener('mouseenter', function() {
+                this.style.transform = 'scale(1.12)';
+                this.style.boxShadow = '2px 6px 16px rgba(33,47,82,0.45)';
+            });
+            fab.addEventListener('mouseleave', function() {
+                this.style.transform = 'scale(1)';
+                this.style.boxShadow = '2px 4px 12px rgba(33,47,82,0.35)';
+            });
+            fab.addEventListener('click', function() {
+                var btns = p.querySelectorAll(
+                    'section[data-testid="stSidebar"] button'
+                );
+                for (var i = 0; i < btns.length; i++) {
+                    if (btns[i].textContent.trim().startsWith('🏠')) {
+                        btns[i].click();
+                        return;
+                    }
+                }
+            });
+            p.body.appendChild(fab);
+        })();
+        </script>""",
+        height=0, scrolling=False,
+    )
+else:
+    # Remove FAB when back on home screen
+    import streamlit.components.v1 as _components
+    _components.html(
+        """<script>
+        (function() {
+            var el = window.parent.document.getElementById('scout-home-fab');
+            if (el) el.remove();
+        })();
+        </script>""",
+        height=0, scrolling=False,
+    )
 
 if st.session_state.view == "mock":
     render_mock_draft(rookies)
