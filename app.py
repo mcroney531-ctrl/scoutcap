@@ -424,10 +424,80 @@ def _user_picks_for_slot(slot: int, rounds: int = 4, teams: int = 12) -> list:
     return picks
 
 
-def _start_draft(slot: int, pins: dict, variance: int, rookies: list):
+def _load_pick_arsenal(season: str = "2026") -> dict:
+    """Pull the user's actual 2026 pick assets from Sleeper traded_picks.
+    Returns a list of picks with round, source ('own' or 'acquired'),
+    from_team name, and estimated_overall (None until slot is confirmed)."""
+    import os
+    league_id = os.getenv("SLEEPER_LEAGUE_ID")
+    username  = os.getenv("SLEEPER_USERNAME")
+
+    user    = get_user(username)
+    rosters = get_rosters(league_id)
+    users   = get_users_in_league(league_id)
+    traded  = get_traded_picks(league_id)
+
+    my_roster = next((r for r in rosters if r.get("owner_id") == user["user_id"]), None)
+    if not my_roster:
+        return {"error": "Could not find your roster"}
+
+    my_rid = my_roster["roster_id"]
+
+    # Map roster_id → display name
+    uid_map = {u["user_id"]: u.get("display_name", "Unknown") for u in users}
+    rid_map = {r["roster_id"]: uid_map.get(r.get("owner_id"), f"Team {r['roster_id']}")
+               for r in rosters}
+
+    # Start: every roster owns their own picks in every round
+    ownership: dict[tuple, int] = {}
+    for r in rosters:
+        for rnd in range(1, 5):
+            ownership[(r["roster_id"], rnd)] = r["roster_id"]
+
+    # Apply trades for the target season
+    for t in traded:
+        if str(t.get("season")) == str(season):
+            ownership[(t["roster_id"], t["round"])] = t["owner_id"]
+
+    # Collect picks the user currently holds
+    picks = []
+    for (orig_rid, rnd), holder in ownership.items():
+        if holder == my_rid:
+            picks.append({
+                "round":    rnd,
+                "orig_rid": orig_rid,
+                "source":   "own" if orig_rid == my_rid else "acquired",
+                "from_team": rid_map.get(orig_rid, f"Team {orig_rid}"),
+            })
+
+    picks.sort(key=lambda x: (x["round"], x["orig_rid"]))
+    return {"my_rid": my_rid, "picks": picks}
+
+
+def _arsenal_to_picks_set(arsenal: list, my_slot: int, acquired_slots: dict,
+                           rounds: int = 4, teams: int = 12) -> set:
+    """Convert arsenal pick list to a set of overall pick numbers.
+    own picks use my_slot; acquired picks use acquired_slots[round_orig_key] or mid-round."""
+    result = set()
+    for p in arsenal:
+        rnd = p["round"]
+        if p["source"] == "own":
+            slot = my_slot
+        else:
+            key = f"{rnd}_{p['orig_rid']}"
+            slot = acquired_slots.get(key, 6)  # default to mid-round
+        # Snake draft formula (even round index = forward, odd = reverse)
+        r_idx = rnd - 1
+        overall = r_idx * teams + slot if r_idx % 2 == 0 else r_idx * teams + (teams - slot + 1)
+        result.add(overall)
+    return result
+
+
+def _start_draft(slot: int, pins: dict, variance: int, rookies: list,
+                 custom_picks_set: set | None = None):
     """Initialize interactive draft state. Called once when user clicks Start Draft."""
     adp = _get_adp_ranking(rookies)
-    user_picks_set = set(_user_picks_for_slot(slot))
+    user_picks_set = custom_picks_set if custom_picks_set is not None else set(_user_picks_for_slot(slot))
     pinned_ids = {str(v) for v in pins.values()}
 
     # Resolve pins to player dicts
@@ -544,12 +614,65 @@ def render_mock_draft(rookies: list):
 
     # ── Setup screen (draft not yet started) ─────────────────────────────────
     if not st.session_state.mock_active:
+
+        # ── Pick arsenal ──────────────────────────────────────────────────────
+        arsenal = st.session_state.mock_arsenal
+        using_real_picks = arsenal is not None and "picks" in arsenal
+
+        with st.container(border=True):
+            load_col, clear_col = st.columns([3, 1])
+            with load_col:
+                st.markdown("**📍 Your pick assets**")
+            with clear_col:
+                if using_real_picks and st.button("✕ Clear", key="clear_arsenal", use_container_width=True):
+                    st.session_state.mock_arsenal = None
+                    st.session_state.mock_acquired_slots = {}
+                    st.rerun()
+
+            if not using_real_picks:
+                if st.button("Load from Sleeper →", use_container_width=True, key="load_arsenal_btn"):
+                    with st.spinner("Fetching your picks..."):
+                        result = _load_pick_arsenal("2026")
+                    st.session_state.mock_arsenal = result
+                    st.rerun()
+                st.caption("Auto-detect your traded picks, extra picks, and missing rounds from your league.")
+            else:
+                picks = arsenal["picks"]
+                if not picks:
+                    st.warning("No 2026 picks found under your roster.")
+                else:
+                    for p in picks:
+                        row_a, row_b = st.columns([3, 2])
+                        with row_a:
+                            rnd_label = f"Round {p['round']}"
+                            if p["source"] == "own":
+                                st.markdown(f"✅ **{rnd_label}** · your pick")
+                            else:
+                                st.markdown(f"✅ **{rnd_label}** · from {p['from_team']}")
+                        with row_b:
+                            if p["source"] == "acquired":
+                                key = f"{p['round']}_{p['orig_rid']}"
+                                cur = st.session_state.mock_acquired_slots.get(key, 6)
+                                slot_val = st.selectbox(
+                                    "Est. slot", list(range(1, 13)), index=cur - 1,
+                                    key=f"acq_slot_{key}", label_visibility="collapsed",
+                                )
+                                st.session_state.mock_acquired_slots[key] = slot_val
+
+                own_rounds  = {p["round"] for p in picks if p["source"] == "own"}
+                all_rounds  = set(range(1, 5))
+                missing     = sorted(all_rounds - {p["round"] for p in picks})
+                if missing:
+                    st.caption(f"❌ No pick in round(s): {', '.join(str(r) for r in missing)} (traded away)")
+
+        # ── Slot + variance ───────────────────────────────────────────────────
         s1, s2, s3 = st.columns([2, 3, 3])
         with s1:
             slot = st.selectbox(
-                "Your draft slot", list(range(1, 13)),
+                "Your slot" if not using_real_picks else "Your slot (own picks)",
+                list(range(1, 13)),
                 index=st.session_state.mock_slot - 1, key="mock_slot_sel",
-                help="Your position in the 12-team league",
+                help="Your natural draft position — applies to picks you originally own",
             )
             st.session_state.mock_slot = slot
         with s2:
@@ -559,7 +682,13 @@ def render_mock_draft(rookies: list):
             )
             st.session_state.mock_variance = variance
         with s3:
-            labels = "  ·  ".join(_pick_label(p) for p in _user_picks_for_slot(slot))
+            if using_real_picks and arsenal.get("picks"):
+                custom_set = _arsenal_to_picks_set(
+                    arsenal["picks"], slot, st.session_state.mock_acquired_slots
+                )
+                labels = "  ·  ".join(_pick_label(p) for p in sorted(custom_set))
+            else:
+                labels = "  ·  ".join(_pick_label(p) for p in _user_picks_for_slot(slot))
             st.metric("Your picks", labels)
 
         pin_count = len(st.session_state.mock_pins)
@@ -586,8 +715,16 @@ def render_mock_draft(rookies: list):
                         st.rerun()
 
         if st.button("▶ Start Draft", type="primary", use_container_width=True, key="start_draft_btn"):
+            custom_set = None
+            if using_real_picks and st.session_state.mock_arsenal.get("picks"):
+                custom_set = _arsenal_to_picks_set(
+                    st.session_state.mock_arsenal["picks"],
+                    st.session_state.mock_slot,
+                    st.session_state.mock_acquired_slots,
+                )
             _start_draft(st.session_state.mock_slot, st.session_state.mock_pins,
-                         st.session_state.mock_variance, rookies)
+                         st.session_state.mock_variance, rookies,
+                         custom_picks_set=custom_set)
             st.rerun()
         return
 
@@ -746,7 +883,7 @@ def render_mock_draft(rookies: list):
 
 # ─────────────────────────────────────────────────────────────────────────────
 
-from tools.sleeper import get_nfl_players, get_user, get_rosters
+from tools.sleeper import get_nfl_players, get_user, get_rosters, get_users_in_league, get_traded_picks
 from agents.synthesis_agent import run_synthesis_agent
 
 # ── Session state defaults ────────────────────────────────────────────────────
@@ -779,6 +916,10 @@ if "mock_draft_pin_map" not in st.session_state:
     st.session_state.mock_draft_pin_map = {}
 if "mock_draft_user_picks_set" not in st.session_state:
     st.session_state.mock_draft_user_picks_set = set()
+if "mock_arsenal" not in st.session_state:
+    st.session_state.mock_arsenal = None   # None = not loaded yet
+if "mock_acquired_slots" not in st.session_state:
+    st.session_state.mock_acquired_slots = {}  # {f"{round}_{orig_rid}": slot}
 
 # ── Data loading ──────────────────────────────────────────────────────────────
 

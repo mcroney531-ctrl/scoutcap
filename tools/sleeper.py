@@ -59,3 +59,12 @@ def get_trending(type: str = "add", sport: str = "nfl", limit: int = 25) -> list
     r = httpx.get(f"{BASE}/players/{sport}/trending/{type}", params={"limit": limit})
     r.raise_for_status()
     return r.json()
+
+
+def get_traded_picks(league_id: str) -> list:
+    """All traded draft picks for the league.
+    Each entry: {season, round, roster_id (original owner),
+    previous_owner_id, owner_id (current holder)}."""
+    r = httpx.get(f"{BASE}/league/{league_id}/traded_picks")
+    r.raise_for_status()
+    return r.json()
