@@ -429,6 +429,7 @@ def _load_pick_arsenal(season: str = "2026") -> dict:
     Returns a list of picks with round, source ('own' or 'acquired'),
     from_team name, and estimated_overall (None until slot is confirmed)."""
     import os
+    from tools.sleeper import get_users_in_league, get_traded_picks
     league_id = os.getenv("SLEEPER_LEAGUE_ID")
     username  = os.getenv("SLEEPER_USERNAME")
 
@@ -883,7 +884,7 @@ def render_mock_draft(rookies: list):
 
 # ─────────────────────────────────────────────────────────────────────────────
 
-from tools.sleeper import get_nfl_players, get_user, get_rosters, get_users_in_league, get_traded_picks
+from tools.sleeper import get_nfl_players, get_user, get_rosters
 from agents.synthesis_agent import run_synthesis_agent
 
 # ── Session state defaults ────────────────────────────────────────────────────
