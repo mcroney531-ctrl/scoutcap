@@ -269,17 +269,18 @@ if _light:
         }
 
         /* ── Home cards — full gradient fill + accent border per card ── */
-        div[data-testid="stVerticalBlockBorderWrapper"]:has(#hc-board) {
+        /* st.container(key=...) adds a .st-key-<key> class on the wrapper */
+        div.st-key-hc_board[data-testid="stVerticalBlockBorderWrapper"] {
           background: linear-gradient(135deg, #f0f7ff 0%, #dbeafe 100%) !important;
           border: 3px solid #3b82f6 !important;
           border-radius: 16px !important;
         }
-        div[data-testid="stVerticalBlockBorderWrapper"]:has(#hc-mock) {
+        div.st-key-hc_mock[data-testid="stVerticalBlockBorderWrapper"] {
           background: linear-gradient(135deg, #fffdf0 0%, #fef9c3 100%) !important;
           border: 3px solid #e8b84b !important;
           border-radius: 16px !important;
         }
-        div[data-testid="stVerticalBlockBorderWrapper"]:has(#hc-all) {
+        div.st-key-hc_all[data-testid="stVerticalBlockBorderWrapper"] {
           background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%) !important;
           border: 3px solid #3fb950 !important;
           border-radius: 16px !important;
@@ -1434,8 +1435,7 @@ if st.session_state.selected_player is None:
             st.info("**Synthesis Agent**\nOrchestrates both + roster need + sentiment → Pick recommendation")
 
     # ── My Board card ─────────────────────────────────────────────────────────
-    with st.container(border=True):
-        st.markdown('<div id="hc-board"></div>', unsafe_allow_html=True)
+    with st.container(border=True, key="hc_board"):
         n = len(st.session_state.shortlist)
         st.markdown(
             f"""<div style="border-left:4px solid #3b82f6;padding:0.45rem 0.75rem 0.45rem 0.75rem;margin-bottom:0.5rem;">
@@ -1460,8 +1460,7 @@ if st.session_state.selected_player is None:
             st.rerun()
 
     # ── Mock Draft card ───────────────────────────────────────────────────────
-    with st.container(border=True):
-        st.markdown('<div id="hc-mock"></div>', unsafe_allow_html=True)
+    with st.container(border=True, key="hc_mock"):
         st.markdown(
             """<div style="border-left:4px solid #e8b84b;padding:0.45rem 0.75rem;margin-bottom:0.5rem;">
             <span style="font-size:1.05rem;font-weight:800;color:#92400e;">
@@ -1485,8 +1484,7 @@ if st.session_state.selected_player is None:
             st.rerun()
 
     # ── All Prospects card ────────────────────────────────────────────────────
-    with st.container(border=True):
-        st.markdown('<div id="hc-all"></div>', unsafe_allow_html=True)
+    with st.container(border=True, key="hc_all"):
         st.markdown(
             f"""<div style="border-left:4px solid #3fb950;padding:0.45rem 0.75rem;margin-bottom:0.5rem;">
             <span style="font-size:1.05rem;font-weight:800;color:#166534;">
@@ -1500,38 +1498,6 @@ if st.session_state.selected_player is None:
         if st.button("View All Prospects →", use_container_width=True, key="open_all"):
             st.session_state.view = "all"
             st.rerun()
-
-    # JS: walk up from each marker to its stVerticalBlockBorderWrapper ancestor and apply gradient
-    import streamlit.components.v1 as _components
-    _components.html("""<script>
-    (function() {
-        var CARDS = [
-            {id:'hc-board', bg:'linear-gradient(135deg,#f0f7ff 0%,#dbeafe 100%)', border:'3px solid #3b82f6'},
-            {id:'hc-mock',  bg:'linear-gradient(135deg,#fffdf0 0%,#fef9c3 100%)', border:'3px solid #e8b84b'},
-            {id:'hc-all',   bg:'linear-gradient(135deg,#f0fdf4 0%,#dcfce7 100%)', border:'3px solid #3fb950'},
-        ];
-        function apply() {
-            var doc = window.parent.document;
-            CARDS.forEach(function(c) {
-                var marker = doc.getElementById(c.id);
-                if (!marker) return;
-                var el = marker;
-                while (el) {
-                    if (el.getAttribute && el.getAttribute('data-testid') === 'stVerticalBlockBorderWrapper') {
-                        el.style.setProperty('background', c.bg, 'important');
-                        el.style.setProperty('border', c.border, 'important');
-                        el.style.setProperty('border-radius', '16px', 'important');
-                        break;
-                    }
-                    el = el.parentElement;
-                }
-            });
-        }
-        apply();
-        setTimeout(apply, 200);
-        setTimeout(apply, 600);
-    })();
-    </script>""", height=0, scrolling=False)
 
     st.stop()
 
