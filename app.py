@@ -269,18 +269,19 @@ if _light:
         }
 
         /* ── Home cards — full gradient fill + accent border per card ── */
-        /* st.container(key=...) adds a .st-key-<key> class on the wrapper */
-        div.st-key-hc_board[data-testid="stVerticalBlockBorderWrapper"] {
+        /* st.container(key=...) adds a .st-key-<key> class directly on the
+           bordered stVerticalBlock (Streamlit 1.58 — no separate wrapper). */
+        .st-key-hc_board {
           background: linear-gradient(135deg, #f0f7ff 0%, #dbeafe 100%) !important;
           border: 3px solid #3b82f6 !important;
           border-radius: 16px !important;
         }
-        div.st-key-hc_mock[data-testid="stVerticalBlockBorderWrapper"] {
+        .st-key-hc_mock {
           background: linear-gradient(135deg, #fffdf0 0%, #fef9c3 100%) !important;
           border: 3px solid #e8b84b !important;
           border-radius: 16px !important;
         }
-        div.st-key-hc_all[data-testid="stVerticalBlockBorderWrapper"] {
+        .st-key-hc_all {
           background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%) !important;
           border: 3px solid #3fb950 !important;
           border-radius: 16px !important;
