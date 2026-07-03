@@ -115,7 +115,7 @@ st.markdown(
       .brand-bar {{
         display: flex; align-items: center; gap: 0.75rem;
         padding: 0.9rem 1.25rem; margin-bottom: 1.2rem;
-        background: linear-gradient(135deg, {NAVY} 0%, #16203b 100%);
+        background: linear-gradient(135deg, #111c38 0%, {NAVY} 50%, #2d5499 100%);
         border: 1px solid rgba(232,184,75,0.25);
         border-left: 4px solid {P['accent']};
         border-radius: 10px;
@@ -264,8 +264,25 @@ if _light:
 
         /* ── Bordered containers — bolder stroke + rounder radius ── */
         div[data-testid="stVerticalBlockBorderWrapper"] {
-          border: 2px solid rgba(33,47,82,0.22) !important;
+          border: 3px solid rgba(33,47,82,0.28) !important;
           border-radius: 16px !important;
+        }
+
+        /* ── Home cards — full gradient fill + accent border per card ── */
+        [data-testid="stMarkdownContainer"]:has(#hc-board)
+          + [data-testid="stVerticalBlockBorderWrapper"] {
+          background: linear-gradient(135deg, #f0f7ff 0%, #dbeafe 100%) !important;
+          border: 3px solid #3b82f6 !important;
+        }
+        [data-testid="stMarkdownContainer"]:has(#hc-mock)
+          + [data-testid="stVerticalBlockBorderWrapper"] {
+          background: linear-gradient(135deg, #fffdf0 0%, #fef9c3 100%) !important;
+          border: 3px solid #e8b84b !important;
+        }
+        [data-testid="stMarkdownContainer"]:has(#hc-all)
+          + [data-testid="stVerticalBlockBorderWrapper"] {
+          background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%) !important;
+          border: 3px solid #3fb950 !important;
         }
         </style>""",
         unsafe_allow_html=True,
@@ -1417,12 +1434,11 @@ if st.session_state.selected_player is None:
             st.info("**Synthesis Agent**\nOrchestrates both + roster need + sentiment → Pick recommendation")
 
     # ── My Board card ─────────────────────────────────────────────────────────
+    st.markdown('<div id="hc-board"></div>', unsafe_allow_html=True)
     with st.container(border=True):
         n = len(st.session_state.shortlist)
         st.markdown(
-            f"""<div style="background:linear-gradient(135deg,#dbeafe55,#eff6ff88);
-            border-radius:10px;padding:0.55rem 1rem;margin-bottom:0.6rem;
-            border-left:4px solid #3b82f6;">
+            f"""<div style="border-left:4px solid #3b82f6;padding:0.45rem 0.75rem 0.45rem 0.75rem;margin-bottom:0.5rem;">
             <span style="font-size:1.05rem;font-weight:800;color:#1e40af;">
             📋 My Board &nbsp;
             <span style="background:#3b82f622;color:#3b82f6;border:1px solid #3b82f666;
@@ -1444,11 +1460,10 @@ if st.session_state.selected_player is None:
             st.rerun()
 
     # ── Mock Draft card ───────────────────────────────────────────────────────
+    st.markdown('<div id="hc-mock"></div>', unsafe_allow_html=True)
     with st.container(border=True):
         st.markdown(
-            """<div style="background:linear-gradient(135deg,#fef9c355,#fefce888);
-            border-radius:10px;padding:0.55rem 1rem;margin-bottom:0.6rem;
-            border-left:4px solid #e8b84b;">
+            """<div style="border-left:4px solid #e8b84b;padding:0.45rem 0.75rem;margin-bottom:0.5rem;">
             <span style="font-size:1.05rem;font-weight:800;color:#92400e;">
             🎯 Mock Draft Simulator</span></div>""",
             unsafe_allow_html=True,
@@ -1470,11 +1485,10 @@ if st.session_state.selected_player is None:
             st.rerun()
 
     # ── All Prospects card ────────────────────────────────────────────────────
+    st.markdown('<div id="hc-all"></div>', unsafe_allow_html=True)
     with st.container(border=True):
         st.markdown(
-            f"""<div style="background:linear-gradient(135deg,#dcfce755,#f0fdf488);
-            border-radius:10px;padding:0.55rem 1rem;margin-bottom:0.6rem;
-            border-left:4px solid #3fb950;">
+            f"""<div style="border-left:4px solid #3fb950;padding:0.45rem 0.75rem;margin-bottom:0.5rem;">
             <span style="font-size:1.05rem;font-weight:800;color:#166534;">
             📊 All Prospects &nbsp;
             <span style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95066;
