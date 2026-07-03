@@ -269,20 +269,20 @@ if _light:
         }
 
         /* ── Home cards — full gradient fill + accent border per card ── */
-        [data-testid="stMarkdownContainer"]:has(#hc-board)
-          + [data-testid="stVerticalBlockBorderWrapper"] {
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(#hc-board) {
           background: linear-gradient(135deg, #f0f7ff 0%, #dbeafe 100%) !important;
           border: 3px solid #3b82f6 !important;
+          border-radius: 16px !important;
         }
-        [data-testid="stMarkdownContainer"]:has(#hc-mock)
-          + [data-testid="stVerticalBlockBorderWrapper"] {
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(#hc-mock) {
           background: linear-gradient(135deg, #fffdf0 0%, #fef9c3 100%) !important;
           border: 3px solid #e8b84b !important;
+          border-radius: 16px !important;
         }
-        [data-testid="stMarkdownContainer"]:has(#hc-all)
-          + [data-testid="stVerticalBlockBorderWrapper"] {
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(#hc-all) {
           background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%) !important;
           border: 3px solid #3fb950 !important;
+          border-radius: 16px !important;
         }
         </style>""",
         unsafe_allow_html=True,
@@ -1434,8 +1434,8 @@ if st.session_state.selected_player is None:
             st.info("**Synthesis Agent**\nOrchestrates both + roster need + sentiment → Pick recommendation")
 
     # ── My Board card ─────────────────────────────────────────────────────────
-    st.markdown('<div id="hc-board"></div>', unsafe_allow_html=True)
     with st.container(border=True):
+        st.markdown('<div id="hc-board"></div>', unsafe_allow_html=True)
         n = len(st.session_state.shortlist)
         st.markdown(
             f"""<div style="border-left:4px solid #3b82f6;padding:0.45rem 0.75rem 0.45rem 0.75rem;margin-bottom:0.5rem;">
@@ -1460,8 +1460,8 @@ if st.session_state.selected_player is None:
             st.rerun()
 
     # ── Mock Draft card ───────────────────────────────────────────────────────
-    st.markdown('<div id="hc-mock"></div>', unsafe_allow_html=True)
     with st.container(border=True):
+        st.markdown('<div id="hc-mock"></div>', unsafe_allow_html=True)
         st.markdown(
             """<div style="border-left:4px solid #e8b84b;padding:0.45rem 0.75rem;margin-bottom:0.5rem;">
             <span style="font-size:1.05rem;font-weight:800;color:#92400e;">
@@ -1485,8 +1485,8 @@ if st.session_state.selected_player is None:
             st.rerun()
 
     # ── All Prospects card ────────────────────────────────────────────────────
-    st.markdown('<div id="hc-all"></div>', unsafe_allow_html=True)
     with st.container(border=True):
+        st.markdown('<div id="hc-all"></div>', unsafe_allow_html=True)
         st.markdown(
             f"""<div style="border-left:4px solid #3fb950;padding:0.45rem 0.75rem;margin-bottom:0.5rem;">
             <span style="font-size:1.05rem;font-weight:800;color:#166534;">
