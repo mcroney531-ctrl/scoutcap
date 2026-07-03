@@ -198,6 +198,17 @@ st.markdown(
       [data-baseweb="tag"] {{ background-color: {NAVY} !important; }}
       [data-baseweb="tag"] span {{ color: #ffffff !important; }}
       [data-baseweb="tag"] svg {{ fill: #ffffff !important; color: #ffffff !important; }}
+
+      /* Prospect rows — keep Player | Age | Team | ⭐ on one line (no mobile stack) */
+      div[class*="st-key-prow_"] div[data-testid="stHorizontalBlock"] {{
+        flex-wrap: nowrap !important; gap: 8px !important; align-items: center;
+      }}
+      div[class*="st-key-prow_"] div[data-testid="stColumn"] {{
+        min-width: 0 !important;
+      }}
+      div[class*="st-key-prow_"] div[data-testid="stColumn"] .stButton > button {{
+        padding: 0.15rem 0.2rem !important;
+      }}
     </style>
     """,
     unsafe_allow_html=True,
@@ -1260,13 +1271,14 @@ if st.session_state.view == "all":
         _label = f"{_ico} {_pos}  ·  {len(_bin)} players" + (f"  ·  {_scouted} scouted ✓" if _scouted else "")
 
         with st.expander(_label, expanded=False):
-            # Column header row
+            # Column header row (Player | Age | Team | ⭐)
             st.markdown(
-                f"<div style='display:grid;grid-template-columns:1fr 90px 1fr;"
+                f"<div style='display:grid;grid-template-columns:3fr 1fr 1fr 0.6fr;"
                 f"gap:0 8px;padding:4px 6px 6px 6px;'>"
                 f"<span style='font-size:0.72rem;font-weight:700;color:{P['muted']};text-transform:uppercase;letter-spacing:.05em;'>Player</span>"
                 f"<span style='font-size:0.72rem;font-weight:700;color:{P['muted']};text-transform:uppercase;letter-spacing:.05em;'>Age</span>"
                 f"<span style='font-size:0.72rem;font-weight:700;color:{P['muted']};text-transform:uppercase;letter-spacing:.05em;'>Team</span>"
+                f"<span></span>"
                 f"</div>"
                 f"<hr style='margin:0 0 4px 0;border:none;border-top:2px solid {_pc}44;'>",
                 unsafe_allow_html=True,
@@ -1278,42 +1290,48 @@ if st.session_state.view == "all":
                 _age_s = f"{_age}" if _age is not None else "—"
                 _cached = _r["player_id"] in st.session_state.analysis_cache
                 _done_badge = " ✓" if _cached else ""
+                _is_fav = _r["player_id"] in st.session_state.shortlist
 
-                left_col, right_col = st.columns([6, 1])
-
-                with left_col:
-                    st.markdown(
-                        f"<div style='display:grid;grid-template-columns:1fr 90px 1fr;"
-                        f"gap:0 8px;align-items:center;padding:5px 6px 0 6px;'>"
-                        f"<span style='font-weight:700;font-size:0.88rem;color:{P['text']};'>{_r['full_name']}</span>"
-                        f"<span style='font-size:0.83rem;color:{P['muted']};'>{_age_s}</span>"
-                        f"<span style='font-size:0.83rem;color:{P['text']};'>{_team}</span>"
-                        f"</div>",
+                # Info row: Player | Age | Team | ⭐ toggle (kept horizontal on mobile)
+                with st.container(key=f"prow_{_r['player_id']}"):
+                    rc1, rc2, rc3, rc4 = st.columns([3, 1, 1, 0.6])
+                    rc1.markdown(
+                        f"<div style='padding-top:6px;font-weight:700;font-size:0.88rem;"
+                        f"color:{P['text']};'>{_r['full_name']}</div>",
                         unsafe_allow_html=True,
                     )
-                    if st.button(
-                        f"Generate Report{_done_badge}",
-                        key=f"gen_{_r['player_id']}",
-                        help=f"Run full scouting pipeline for {_r['full_name']}",
-                    ):
-                        show_report_overlay(_r)
+                    rc2.markdown(
+                        f"<div style='padding-top:6px;font-size:0.83rem;color:{P['muted']};'>{_age_s}</div>",
+                        unsafe_allow_html=True,
+                    )
+                    rc3.markdown(
+                        f"<div style='padding-top:6px;font-size:0.83rem;color:{P['text']};'>{_team}</div>",
+                        unsafe_allow_html=True,
+                    )
+                    with rc4:
+                        if st.button(
+                            "⭐" if _is_fav else "☆",
+                            key=f"fav_all_{_r['player_id']}",
+                            use_container_width=True,
+                            help="Track on My Board",
+                        ):
+                            if _is_fav:
+                                st.session_state.shortlist.remove(_r["player_id"])
+                            else:
+                                st.session_state.shortlist.append(_r["player_id"])
+                            st.rerun()
 
-                with right_col:
-                    _is_fav = _r["player_id"] in st.session_state.shortlist
-                    if st.button(
-                        "★" if _is_fav else "☆",
-                        key=f"fav_all_{_r['player_id']}",
-                        use_container_width=True,
-                        help="Track on My Board",
-                    ):
-                        if _is_fav:
-                            st.session_state.shortlist.remove(_r["player_id"])
-                        else:
-                            st.session_state.shortlist.append(_r["player_id"])
-                        st.rerun()
+                # Full-width Generate Report button
+                if st.button(
+                    f"Generate Report{_done_badge}",
+                    key=f"gen_{_r['player_id']}",
+                    use_container_width=True,
+                    help=f"Run full scouting pipeline for {_r['full_name']}",
+                ):
+                    show_report_overlay(_r)
 
                 st.markdown(
-                    f"<hr style='margin:0;border:none;border-top:1px solid {P['border']};'>",
+                    f"<hr style='margin:2px 0 0 0;border:none;border-top:1px solid {P['border']};'>",
                     unsafe_allow_html=True,
                 )
 
