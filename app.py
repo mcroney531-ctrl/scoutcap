@@ -1189,68 +1189,37 @@ with st.sidebar:
 
     rookies = load_rookies()
 
-    if _on_home:
-        # Landing page: show nav shortcuts instead of player list
+    # Unified nav shortcuts — same in every view
+    st.divider()
+    if st.button("📋 My Board", use_container_width=True, key="sb_board"):
+        st.session_state.selected_player = None
+        st.session_state.view = "board"
+        st.rerun()
+    if st.button("🎯 Mock Draft", use_container_width=True, key="sb_mock"):
+        st.session_state.selected_player = None
+        st.session_state.view = "mock"
+        st.rerun()
+    if st.button("📊 All Prospects", use_container_width=True, key="sb_all"):
+        st.session_state.selected_player = None
+        st.session_state.view = "all"
+        st.rerun()
+
+    # Shortlist quick-access
+    if st.session_state.shortlist:
         st.divider()
-        if st.button("📋 My Board", use_container_width=True, key="sb_board"):
-            st.session_state.view = "board"
-            st.rerun()
-        if st.button("🎯 Mock Draft", use_container_width=True, key="sb_mock"):
-            st.session_state.view = "mock"
-            st.rerun()
-        if st.button("📊 All Prospects", use_container_width=True, key="sb_all"):
-            st.session_state.view = "all"
-            st.rerun()
-    else:
-        if st.button("🎯 Mock Draft", use_container_width=True, key="sidebar_mock"):
-            st.session_state.view = "mock"
-            st.rerun()
-
-        # Position filter
-        pos_filter = st.multiselect(
-            "Position",
-            ["QB", "RB", "WR", "TE"],
-            default=["QB", "RB", "WR", "TE"],
-            label_visibility="collapsed",
-        )
-
-        # Search
-        search = st.text_input("Search players", placeholder="e.g. Jeremiyah Love", label_visibility="collapsed")
-
-        filtered = [
-            r for r in rookies
-            if r["position"] in pos_filter
-            and (not search or search.lower() in r["full_name"].lower())
-        ]
-
-        st.caption(f"{len(filtered)} prospects • click to scout")
-        st.divider()
-
-        # Shortlist section
-        if st.session_state.shortlist:
-            with st.expander(f"⭐ My Shortlist ({len(st.session_state.shortlist)})", expanded=False):
-                for pid in list(st.session_state.shortlist):
-                    match = next((r for r in rookies if r["player_id"] == pid), None)
-                    if match:
-                        col1, col2 = st.columns([4, 1])
-                        with col1:
-                            if st.button(match["full_name"], key=f"sl_{pid}", use_container_width=True):
-                                st.session_state.selected_player = match
-                        with col2:
-                            if st.button("✕", key=f"rm_{pid}"):
-                                st.session_state.shortlist.remove(pid)
-                                st.rerun()
-            st.divider()
-
-        # Draft board list
-        for r in filtered[:75]:
-            pos_colors = {"QB": "🟦", "RB": "🟩", "WR": "🟨", "TE": "🟧"}
-            icon = pos_colors.get(r["position"], "⬜")
-            label = f"{icon} {r['full_name']} · {r['position']} · {r['team']}"
-
-            if st.button(label, key=f"board_{r['player_id']}", use_container_width=True):
-                st.session_state.selected_player = r
-                st.rerun()
+        with st.expander(f"⭐ My Shortlist ({len(st.session_state.shortlist)})", expanded=False):
+            for pid in list(st.session_state.shortlist):
+                match = next((r for r in rookies if r["player_id"] == pid), None)
+                if match:
+                    col1, col2 = st.columns([4, 1])
+                    with col1:
+                        if st.button(match["full_name"], key=f"sl_{pid}", use_container_width=True):
+                            st.session_state.selected_player = match
+                            st.rerun()
+                    with col2:
+                        if st.button("✕", key=f"rm_{pid}"):
+                            st.session_state.shortlist.remove(pid)
+                            st.rerun()
 
 # ── Main panel ────────────────────────────────────────────────────────────────
 
@@ -1290,17 +1259,14 @@ if st.session_state.view == "all":
         _scouted = sum(1 for r in _bin if r["player_id"] in st.session_state.analysis_cache)
         _label = f"{_ico} {_pos}  ·  {len(_bin)} players" + (f"  ·  {_scouted} scouted ✓" if _scouted else "")
 
-        with st.expander(_label, expanded=(_pos == "QB")):
+        with st.expander(_label, expanded=False):
             # Column header row
             st.markdown(
-                f"<div style='display:grid;grid-template-columns:1fr 90px 90px 1fr 80px 40px;"
+                f"<div style='display:grid;grid-template-columns:1fr 90px 1fr;"
                 f"gap:0 8px;padding:4px 6px 6px 6px;'>"
                 f"<span style='font-size:0.72rem;font-weight:700;color:{P['muted']};text-transform:uppercase;letter-spacing:.05em;'>Player</span>"
-                f"<span style='font-size:0.72rem;font-weight:700;color:{P['muted']};text-transform:uppercase;letter-spacing:.05em;'>Team</span>"
                 f"<span style='font-size:0.72rem;font-weight:700;color:{P['muted']};text-transform:uppercase;letter-spacing:.05em;'>Age</span>"
-                f"<span style='font-size:0.72rem;font-weight:700;color:{P['muted']};text-transform:uppercase;letter-spacing:.05em;'>College</span>"
-                f"<span style='font-size:0.72rem;font-weight:700;color:{P['muted']};text-transform:uppercase;letter-spacing:.05em;'></span>"
-                f"<span></span>"
+                f"<span style='font-size:0.72rem;font-weight:700;color:{P['muted']};text-transform:uppercase;letter-spacing:.05em;'>Team</span>"
                 f"</div>"
                 f"<hr style='margin:0 0 4px 0;border:none;border-top:2px solid {_pc}44;'>",
                 unsafe_allow_html=True,
@@ -1310,7 +1276,6 @@ if st.session_state.view == "all":
                 _team  = _r.get("team") or "FA"
                 _age   = _r.get("age")
                 _age_s = f"{_age}" if _age is not None else "—"
-                _col   = _r.get("college") or "—"
                 _cached = _r["player_id"] in st.session_state.analysis_cache
                 _done_badge = " ✓" if _cached else ""
 
@@ -1318,12 +1283,11 @@ if st.session_state.view == "all":
 
                 with left_col:
                     st.markdown(
-                        f"<div style='display:grid;grid-template-columns:1fr 90px 90px 1fr;"
+                        f"<div style='display:grid;grid-template-columns:1fr 90px 1fr;"
                         f"gap:0 8px;align-items:center;padding:5px 6px 0 6px;'>"
                         f"<span style='font-weight:700;font-size:0.88rem;color:{P['text']};'>{_r['full_name']}</span>"
-                        f"<span style='font-size:0.83rem;color:{P['text']};'>{_team}</span>"
                         f"<span style='font-size:0.83rem;color:{P['muted']};'>{_age_s}</span>"
-                        f"<span style='font-size:0.8rem;color:{P['muted']};'>{_col}</span>"
+                        f"<span style='font-size:0.83rem;color:{P['text']};'>{_team}</span>"
                         f"</div>",
                         unsafe_allow_html=True,
                     )
