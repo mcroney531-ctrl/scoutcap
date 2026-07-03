@@ -356,7 +356,7 @@ SORT_FIELDS = {
     "Position": "position",
     "Team": "team",
     "College": "college",
-    "Depth Chart": "depth_chart_order",
+    "Age": "age",
 }
 
 
@@ -536,7 +536,7 @@ def render_prospect_table(all_rows, key_prefix):
                 "Pos": r["position"],
                 "Team": r["team"],
                 "College": r["college"] or "—",
-                "Depth": r["depth_chart_order"],
+                "Age": r.get("age") if r.get("age") is not None else "—",
                 "Status": r["status"] or "—",
             }
             for r in rows
@@ -547,7 +547,7 @@ def render_prospect_table(all_rows, key_prefix):
     edited = st.data_editor(
         df,
         column_config={"★": st.column_config.CheckboxColumn("★", help="Track on My Board", width="small")},
-        disabled=["Rank", "Name", "Pos", "Team", "College", "Depth", "Status"],
+        disabled=["Rank", "Name", "Pos", "Team", "College", "Age", "Status"],
         hide_index=True,
         use_container_width=True,
         height=560,
@@ -1111,6 +1111,22 @@ if "mock_acquired_slots" not in st.session_state:
 # ── Data loading ──────────────────────────────────────────────────────────────
 
 
+def _decimal_age(birth_date: str | None, fallback_age=None):
+    """Compute decimal age (e.g. 21.4) from a YYYY-MM-DD birth_date string.
+    Falls back to Sleeper's integer age when birth_date is missing."""
+    if birth_date:
+        try:
+            from datetime import date
+            y, m, d = (int(x) for x in birth_date.split("-"))
+            born = date(y, m, d)
+            today = date.today()
+            days = (today - born).days
+            return round(days / 365.25, 1)
+        except Exception:
+            pass
+    return float(fallback_age) if fallback_age else None
+
+
 @st.cache_data(ttl=3600, show_spinner="Loading rookie draft board...")
 def load_rookies():
     players = get_nfl_players()
@@ -1122,6 +1138,7 @@ def load_rookies():
             "team": p.get("team") or "FA",
             "search_rank": p.get("search_rank") or 9999999,
             "depth_chart_order": p.get("depth_chart_order"),
+            "age": _decimal_age(p.get("birth_date"), p.get("age")),
             "status": p.get("status", ""),
             "college": p.get("college", ""),
         }
@@ -1259,7 +1276,7 @@ if st.session_state.view == "all":
                 f"gap:0 8px;padding:4px 6px 6px 6px;'>"
                 f"<span style='font-size:0.72rem;font-weight:700;color:{P['muted']};text-transform:uppercase;letter-spacing:.05em;'>Player</span>"
                 f"<span style='font-size:0.72rem;font-weight:700;color:{P['muted']};text-transform:uppercase;letter-spacing:.05em;'>Team</span>"
-                f"<span style='font-size:0.72rem;font-weight:700;color:{P['muted']};text-transform:uppercase;letter-spacing:.05em;'>Depth</span>"
+                f"<span style='font-size:0.72rem;font-weight:700;color:{P['muted']};text-transform:uppercase;letter-spacing:.05em;'>Age</span>"
                 f"<span style='font-size:0.72rem;font-weight:700;color:{P['muted']};text-transform:uppercase;letter-spacing:.05em;'>College</span>"
                 f"<span style='font-size:0.72rem;font-weight:700;color:{P['muted']};text-transform:uppercase;letter-spacing:.05em;'></span>"
                 f"<span></span>"
@@ -1270,7 +1287,8 @@ if st.session_state.view == "all":
 
             for _r in _bin:
                 _team  = _r.get("team") or "FA"
-                _depth = _r.get("depth_chart_order") or "—"
+                _age   = _r.get("age")
+                _age_s = f"{_age}" if _age is not None else "—"
                 _col   = _r.get("college") or "—"
                 _cached = _r["player_id"] in st.session_state.analysis_cache
                 _done_badge = " ✓" if _cached else ""
@@ -1283,7 +1301,7 @@ if st.session_state.view == "all":
                         f"gap:0 8px;align-items:center;padding:5px 6px 0 6px;'>"
                         f"<span style='font-weight:700;font-size:0.88rem;color:{P['text']};'>{_r['full_name']}</span>"
                         f"<span style='font-size:0.83rem;color:{P['text']};'>{_team}</span>"
-                        f"<span style='font-size:0.83rem;color:{P['muted']};'>{_depth}</span>"
+                        f"<span style='font-size:0.83rem;color:{P['muted']};'>{_age_s}</span>"
                         f"<span style='font-size:0.8rem;color:{P['muted']};'>{_col}</span>"
                         f"</div>",
                         unsafe_allow_html=True,
