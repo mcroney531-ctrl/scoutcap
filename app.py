@@ -123,9 +123,12 @@ st.markdown(
       .brand-mark {{ font-size: 1.7rem; line-height: 1; }}
       .brand-title {{
         font-size: 1.35rem; font-weight: 800; letter-spacing: -0.01em;
-        color: #f3f5fa !important; margin: 0;
+        background: linear-gradient(90deg, #f3f5fa 20%, #e8b84b 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        margin: 0;
       }}
-      .brand-title .accent {{ color: #e8b84b !important; }}
       .brand-sub {{ font-size: 0.8rem; color: #aeb8cc !important; margin: 0.1rem 0 0 0; }}
 
       /* Grade badge pills */
@@ -258,6 +261,12 @@ if _light:
         div[data-testid="stToggle"] > label {
           gap: 0.5rem;
         }
+
+        /* ── Bordered containers — bolder stroke + rounder radius ── */
+        div[data-testid="stVerticalBlockBorderWrapper"] {
+          border: 2px solid rgba(33,47,82,0.22) !important;
+          border-radius: 16px !important;
+        }
         </style>""",
         unsafe_allow_html=True,
     )
@@ -293,13 +302,33 @@ def brand_bar(subtitle: str):
         <div class="brand-bar">
           <div class="brand-mark">🏈</div>
           <div>
-            <p class="brand-title">Rookie <span class="accent">Scout</span></p>
+            <p class="brand-title">Rookie Scout</p>
             <p class="brand-sub">{subtitle}</p>
           </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
+
+
+NFL_TEAM_COLORS = {
+    "ARI": ("#97233F", "#FFB612"), "ATL": ("#A71930", "#000000"),
+    "BAL": ("#241773", "#9E7C0C"), "BUF": ("#00338D", "#C60C30"),
+    "CAR": ("#0085CA", "#101820"), "CHI": ("#0B162A", "#C83803"),
+    "CIN": ("#FB4F14", "#000000"), "CLE": ("#311D00", "#FF3C00"),
+    "DAL": ("#003594", "#041E42"), "DEN": ("#FB4F14", "#002244"),
+    "DET": ("#0076B6", "#B0B7BC"), "GB":  ("#203731", "#FFB612"),
+    "HOU": ("#03202F", "#A71930"), "IND": ("#002C5F", "#A2AAAD"),
+    "JAX": ("#006778", "#D7A22A"), "KC":  ("#E31837", "#FFB81C"),
+    "LA":  ("#003594", "#FFA300"), "LAC": ("#0080C6", "#FFC20E"),
+    "LV":  ("#000000", "#A5ACAF"), "MIA": ("#008E97", "#FC4C02"),
+    "MIN": ("#4F2683", "#FFC62F"), "NE":  ("#002244", "#C60C30"),
+    "NO":  ("#101820", "#D3BC8D"), "NYG": ("#0B2265", "#A71930"),
+    "NYJ": ("#125740", "#000000"), "PHI": ("#004C54", "#A5ACAF"),
+    "PIT": ("#FFB612", "#101820"), "SEA": ("#002244", "#69BE28"),
+    "SF":  ("#AA0000", "#B3995D"), "TB":  ("#D50A0A", "#FF7900"),
+    "TEN": ("#0C2340", "#4B92DB"), "WAS": ("#5A1414", "#FFB612"),
+}
 
 
 SORT_FIELDS = {
@@ -310,6 +339,144 @@ SORT_FIELDS = {
     "College": "college",
     "Depth Chart": "depth_chart_order",
 }
+
+
+@st.dialog("Scouting Report", width="large")
+def show_report_overlay(player: dict):
+    """Full scouting report rendered inside a modal overlay."""
+    pid   = player["player_id"]
+    name  = player["full_name"]
+    pos   = player.get("position", "")
+    team  = player.get("team") or "FA"
+    college = player.get("college") or ""
+
+    # Team color gradient header
+    c1, c2 = NFL_TEAM_COLORS.get(team, (NAVY, "#4a6fa5"))
+    jersey  = player.get("number") or player.get("jersey_number") or ""
+    number_str = f" #{jersey}" if jersey else ""
+    st.markdown(
+        f"""<div style="background:linear-gradient(135deg,{c1} 0%,{c2} 100%);
+        border-radius:14px;padding:1rem 1.25rem;margin-bottom:1rem;">
+        <div style="font-size:1.4rem;font-weight:900;color:#ffffff;letter-spacing:-0.01em;">
+          {name}{number_str}
+        </div>
+        <div style="font-size:0.85rem;color:rgba(255,255,255,0.82);margin-top:0.2rem;">
+          {pos} &nbsp;·&nbsp; {team} &nbsp;·&nbsp; {college}
+        </div></div>""",
+        unsafe_allow_html=True,
+    )
+
+    # Run or retrieve analysis
+    if pid not in st.session_state.analysis_cache:
+        steps = [
+            "🔍 Situation Agent: evaluating landing spot and depth chart...",
+            "📊 Production Agent: analyzing college stats and injury history...",
+            "🧠 Synthesis Agent: combining signals and computing recommendation...",
+        ]
+        prog = st.empty()
+        for step in steps:
+            prog.info(step)
+        try:
+            result = asyncio.run(run_synthesis_agent(name))
+            st.session_state.analysis_cache[pid] = result
+            prog.empty()
+        except Exception as e:
+            prog.empty()
+            st.error(f"Pipeline error: {e}")
+            return
+
+    analysis = st.session_state.analysis_cache.get(pid, {})
+
+    if "raw_output" in analysis:
+        st.warning("Agent returned unstructured output:")
+        st.text(analysis["raw_output"])
+        return
+
+    talent_g  = analysis.get("talent_grade", "—")
+    opp_g     = analysis.get("opportunity_grade", "—")
+    rec       = analysis.get("recommended_pick", "—")
+    floor_p   = analysis.get("floor_pick", "—")
+    ceil_p    = analysis.get("ceiling_pick", "—")
+    composite = analysis.get("composite_score", "—")
+    roster_need = analysis.get("roster_need", "—")
+
+    st.markdown(
+        f"Talent {grade_pill(talent_g)} &nbsp;&nbsp; Opportunity {grade_pill(opp_g)}",
+        unsafe_allow_html=True,
+    )
+    st.write("")
+
+    c1m, c2m, c3m, c4m = st.columns(4)
+    c1m.metric("Talent Grade", talent_g, f"Score: {analysis.get('talent_score','—')}")
+    c2m.metric("Opportunity Grade", opp_g, f"Score: {analysis.get('opportunity_score','—')}")
+    c3m.metric("Composite Score", composite)
+    c4m.metric("Roster Need", roster_need)
+    st.divider()
+
+    pc1, pc2, pc3 = st.columns(3)
+    pc1.metric("🎯 Recommended Pick", rec)
+    pc2.metric("📈 Ceiling", ceil_p)
+    pc3.metric("📉 Floor", floor_p)
+    st.divider()
+
+    risk = analysis.get("risk_modifier", {})
+    st.markdown(
+        f"**Risk Modifier:** Durability {risk.get('durability_score','—')}/5 "
+        f"· Injury chance {risk.get('injury_chance_pct','—')}%"
+    )
+    if risk.get("injury_notes"):
+        st.caption(risk["injury_notes"])
+    st.divider()
+
+    comp = analysis.get("competition", {})
+    if comp:
+        vet_n  = comp.get("veteran_count", "—")
+        repl   = comp.get("replaceable_count")
+        notable = comp.get("notable", []) or []
+        head = f"**🪑 Veteran Competition:** {vet_n} ahead"
+        if repl is not None:
+            head += f" · {repl} replaceable (D/F)"
+        st.markdown(head)
+        if notable:
+            pills = " ".join(
+                f"{c.get('name','?')} {grade_pill(c.get('grade','—'))}" for c in notable
+            )
+            st.markdown(f"Real competition: {pills}", unsafe_allow_html=True)
+        if comp.get("summary"):
+            st.caption(comp["summary"])
+        st.divider()
+
+    st.markdown("**Analysis**")
+    st.markdown(analysis.get("narrative", ""))
+
+    sent = analysis.get("sentiment", {})
+    rank = sent.get("rank_in_class")
+    activity = sent.get("activity_level", "")
+    if rank:
+        st.caption(f"📊 Sentiment: #{rank} in rookie class trending adds ({activity} activity period)")
+    else:
+        st.caption(f"📊 Sentiment: Not in current trending ({activity} activity — treat as neutral)")
+    st.divider()
+
+    up_col, risk_col = st.columns(2)
+    with up_col:
+        st.markdown("**Key Upside**")
+        for item in analysis.get("key_upside", []):
+            st.markdown(f"✅ {item}")
+    with risk_col:
+        st.markdown("**Key Risks**")
+        for item in analysis.get("key_risks", []):
+            st.markdown(f"⚠️ {item}")
+    st.divider()
+
+    st.caption(f"**KTC Comparison:** {analysis.get('ktc_comparison','—')}")
+    st.caption(f"**Roster Note:** {analysis.get('roster_need_note','—')}")
+
+    # Add to shortlist shortcut
+    if pid not in st.session_state.shortlist:
+        if st.button("⭐ Add to My Board", use_container_width=True, key=f"ol_fav_{pid}"):
+            st.session_state.shortlist.append(pid)
+            st.rerun()
 
 
 def render_prospect_table(all_rows, key_prefix):
@@ -963,57 +1130,70 @@ with st.sidebar:
 
     st.toggle("☀️ Light mode", key="ui_light_mode", value=True, help="Toggle between light (default) and dark navy theme")
 
-    if st.button("🎯 Mock Draft", use_container_width=True, key="sidebar_mock"):
-        st.session_state.view = "mock"
-        st.rerun()
-
     rookies = load_rookies()
 
-    # Position filter
-    pos_filter = st.multiselect(
-        "Position",
-        ["QB", "RB", "WR", "TE"],
-        default=["QB", "RB", "WR", "TE"],
-        label_visibility="collapsed",
-    )
+    if _on_home:
+        # Landing page: show nav shortcuts instead of player list
+        st.divider()
+        if st.button("📋 My Board", use_container_width=True, key="sb_board"):
+            st.session_state.view = "board"
+            st.rerun()
+        if st.button("🎯 Mock Draft", use_container_width=True, key="sb_mock"):
+            st.session_state.view = "mock"
+            st.rerun()
+        if st.button("📊 All Prospects", use_container_width=True, key="sb_all"):
+            st.session_state.view = "all"
+            st.rerun()
+    else:
+        if st.button("🎯 Mock Draft", use_container_width=True, key="sidebar_mock"):
+            st.session_state.view = "mock"
+            st.rerun()
 
-    # Search
-    search = st.text_input("Search players", placeholder="e.g. Jeremiyah Love", label_visibility="collapsed")
+        # Position filter
+        pos_filter = st.multiselect(
+            "Position",
+            ["QB", "RB", "WR", "TE"],
+            default=["QB", "RB", "WR", "TE"],
+            label_visibility="collapsed",
+        )
 
-    filtered = [
-        r for r in rookies
-        if r["position"] in pos_filter
-        and (not search or search.lower() in r["full_name"].lower())
-    ]
+        # Search
+        search = st.text_input("Search players", placeholder="e.g. Jeremiyah Love", label_visibility="collapsed")
 
-    st.caption(f"{len(filtered)} prospects • click to scout")
-    st.divider()
+        filtered = [
+            r for r in rookies
+            if r["position"] in pos_filter
+            and (not search or search.lower() in r["full_name"].lower())
+        ]
 
-    # Shortlist section
-    if st.session_state.shortlist:
-        with st.expander(f"⭐ My Shortlist ({len(st.session_state.shortlist)})", expanded=False):
-            for pid in list(st.session_state.shortlist):
-                match = next((r for r in rookies if r["player_id"] == pid), None)
-                if match:
-                    col1, col2 = st.columns([4, 1])
-                    with col1:
-                        if st.button(match["full_name"], key=f"sl_{pid}", use_container_width=True):
-                            st.session_state.selected_player = match
-                    with col2:
-                        if st.button("✕", key=f"rm_{pid}"):
-                            st.session_state.shortlist.remove(pid)
-                            st.rerun()
+        st.caption(f"{len(filtered)} prospects • click to scout")
         st.divider()
 
-    # Draft board list
-    for r in filtered[:75]:
-        pos_colors = {"QB": "🟦", "RB": "🟩", "WR": "🟨", "TE": "🟧"}
-        icon = pos_colors.get(r["position"], "⬜")
-        label = f"{icon} {r['full_name']} · {r['position']} · {r['team']}"
+        # Shortlist section
+        if st.session_state.shortlist:
+            with st.expander(f"⭐ My Shortlist ({len(st.session_state.shortlist)})", expanded=False):
+                for pid in list(st.session_state.shortlist):
+                    match = next((r for r in rookies if r["player_id"] == pid), None)
+                    if match:
+                        col1, col2 = st.columns([4, 1])
+                        with col1:
+                            if st.button(match["full_name"], key=f"sl_{pid}", use_container_width=True):
+                                st.session_state.selected_player = match
+                        with col2:
+                            if st.button("✕", key=f"rm_{pid}"):
+                                st.session_state.shortlist.remove(pid)
+                                st.rerun()
+            st.divider()
 
-        if st.button(label, key=f"board_{r['player_id']}", use_container_width=True):
-            st.session_state.selected_player = r
-            st.rerun()
+        # Draft board list
+        for r in filtered[:75]:
+            pos_colors = {"QB": "🟦", "RB": "🟩", "WR": "🟨", "TE": "🟧"}
+            icon = pos_colors.get(r["position"], "⬜")
+            label = f"{icon} {r['full_name']} · {r['position']} · {r['team']}"
+
+            if st.button(label, key=f"board_{r['player_id']}", use_container_width=True):
+                st.session_state.selected_player = r
+                st.rerun()
 
 # ── Main panel ────────────────────────────────────────────────────────────────
 
@@ -1026,11 +1206,78 @@ if st.session_state.view == "all":
     with top_l:
         st.markdown(f"### 📊 All Prospects · {len(rookies)} players")
     with top_r:
-        if st.button("← Back", use_container_width=True):
+        if st.button("← Back", use_container_width=True, key="all_back"):
             st.session_state.view = "home"
             st.rerun()
 
-    render_prospect_table(rookies, "all")
+    # Filters
+    fc1, fc2, fc3 = st.columns([3, 2, 3])
+    _all_pos  = fc1.multiselect("Position", ["QB","RB","WR","TE"],
+                                default=["QB","RB","WR","TE"], key="all_pos")
+    _all_sort = fc2.selectbox("Sort by", list(SORT_FIELDS.keys()), key="all_sort")
+    _all_search = fc3.text_input("Search", placeholder="Filter by name…", key="all_search",
+                                 label_visibility="collapsed")
+
+    def _sv_all(r):
+        v = r.get(SORT_FIELDS[_all_sort])
+        if v is None or v == "":
+            return (1, "")
+        return (0, v.lower() if isinstance(v, str) else v)
+
+    _all_rows = [
+        r for r in rookies
+        if r["position"] in _all_pos
+        and (not _all_search or _all_search.lower() in r["full_name"].lower())
+    ]
+    _all_rows = sorted(_all_rows, key=_sv_all)
+
+    st.caption(f"{len(_all_rows)} prospects · click **Generate Report** to run the full scouting pipeline")
+    st.divider()
+
+    POS_COLOR_MAP = {"QB": "#3b82f6", "RB": "#3fb950", "WR": "#e8b84b", "TE": "#e3873c"}
+    POS_ICON_MAP  = {"QB": "🟦", "RB": "🟩", "WR": "🟨", "TE": "🟧"}
+
+    for _r in _all_rows[:120]:
+        _pos  = _r.get("position", "")
+        _team = _r.get("team") or "FA"
+        _col  = _r.get("college") or "—"
+        _pc   = POS_COLOR_MAP.get(_pos, P["muted"])
+        _ico  = POS_ICON_MAP.get(_pos, "⬜")
+        _cached = _r["player_id"] in st.session_state.analysis_cache
+        _done_badge = " ✓" if _cached else ""
+
+        left_col, right_col = st.columns([5, 1])
+
+        with left_col:
+            st.markdown(
+                f"<div style='padding:6px 4px 2px 4px;'>"
+                f"<span style='font-weight:700;font-size:0.92rem;color:{P['text']};'>"
+                f"{_ico} {_r['full_name']}</span>"
+                f"<span style='font-size:0.8rem;color:{_pc};font-weight:600;margin-left:8px;'>{_pos}</span>"
+                f"<span style='font-size:0.8rem;color:{P['muted']};margin-left:6px;'>· {_team} · {_col}</span>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+            if st.button(
+                f"Generate Report{_done_badge}",
+                key=f"gen_{_r['player_id']}",
+                help=f"Run full scouting pipeline for {_r['full_name']}",
+            ):
+                show_report_overlay(_r)
+
+        with right_col:
+            _is_fav = _r["player_id"] in st.session_state.shortlist
+            if st.button("★" if _is_fav else "☆", key=f"fav_all_{_r['player_id']}",
+                         use_container_width=True, help="Track on My Board"):
+                if _is_fav:
+                    st.session_state.shortlist.remove(_r["player_id"])
+                else:
+                    st.session_state.shortlist.append(_r["player_id"])
+                st.rerun()
+
+        st.markdown(f"<hr style='margin:0;border:none;border-top:1px solid {P['border']};'>",
+                    unsafe_allow_html=True)
+
     st.stop()
 
 
@@ -1152,15 +1399,20 @@ if st.session_state.selected_player is None:
         with col3:
             st.info("**Synthesis Agent**\nOrchestrates both + roster need + sentiment → Pick recommendation")
 
-    # ── My Board card (click to open the board table) ─────────────────────────
+    # ── My Board card ─────────────────────────────────────────────────────────
     with st.container(border=True):
         n = len(st.session_state.shortlist)
         st.markdown(
-            f"### 📋 My Board &nbsp;<span class='grade-pill' "
-            f"style='background:{P['accent']}22;color:{P['accent']};border:1px solid {P['accent']}66;'>{n}</span>",
+            f"""<div style="background:linear-gradient(135deg,#dbeafe55,#eff6ff88);
+            border-radius:10px;padding:0.55rem 1rem;margin-bottom:0.6rem;
+            border-left:4px solid #3b82f6;">
+            <span style="font-size:1.05rem;font-weight:800;color:#1e40af;">
+            📋 My Board &nbsp;
+            <span style="background:#3b82f622;color:#3b82f6;border:1px solid #3b82f666;
+            border-radius:999px;padding:0.1rem 0.55rem;font-size:0.85rem;">{n}</span>
+            </span></div>""",
             unsafe_allow_html=True,
         )
-
         if not st.session_state.shortlist:
             st.caption("Your board is empty. Star players (★) from All Prospects or a scouting report to track them here.")
         else:
@@ -1170,16 +1422,21 @@ if st.session_state.selected_player is None:
             ]
             preview = [p for p in preview if p]
             st.caption(", ".join(preview[:6]) + (" …" if len(preview) > 6 else ""))
-
         if st.button("Open My Board →", use_container_width=True, key="open_board"):
             st.session_state.view = "board"
             st.rerun()
 
     # ── Mock Draft card ───────────────────────────────────────────────────────
     with st.container(border=True):
-        st.markdown("### 🎯 Mock Draft Simulator")
+        st.markdown(
+            """<div style="background:linear-gradient(135deg,#fef9c355,#fefce888);
+            border-radius:10px;padding:0.55rem 1rem;margin-bottom:0.6rem;
+            border-left:4px solid #e8b84b;">
+            <span style="font-size:1.05rem;font-weight:800;color:#92400e;">
+            🎯 Mock Draft Simulator</span></div>""",
+            unsafe_allow_html=True,
+        )
         if st.session_state.mock_active:
-            n_done = len(st.session_state.mock_draft_picks)
             cur = st.session_state.mock_draft_current_pick
             if cur > 48:
                 haul = [
@@ -1195,10 +1452,23 @@ if st.session_state.selected_player is None:
             st.session_state.view = "mock"
             st.rerun()
 
-    st.write("")
-    if st.button("📊 View all prospects →", use_container_width=True):
-        st.session_state.view = "all"
-        st.rerun()
+    # ── All Prospects card ────────────────────────────────────────────────────
+    with st.container(border=True):
+        st.markdown(
+            f"""<div style="background:linear-gradient(135deg,#dcfce755,#f0fdf488);
+            border-radius:10px;padding:0.55rem 1rem;margin-bottom:0.6rem;
+            border-left:4px solid #3fb950;">
+            <span style="font-size:1.05rem;font-weight:800;color:#166534;">
+            📊 All Prospects &nbsp;
+            <span style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95066;
+            border-radius:999px;padding:0.1rem 0.55rem;font-size:0.85rem;">{len(rookies)}</span>
+            </span></div>""",
+            unsafe_allow_html=True,
+        )
+        st.caption("Full 2026 rookie class — sort, filter by position, and generate scouting reports.")
+        if st.button("View All Prospects →", use_container_width=True, key="open_all"):
+            st.session_state.view = "all"
+            st.rerun()
 
     st.stop()
 
