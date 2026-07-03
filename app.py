@@ -100,9 +100,9 @@ st.markdown(
     f"""
     <style>
       {_brand_font_face()}
-      @import url('https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@300;400;500;600;700;800&display=swap');
 
-      /* Typeface — Archivo on text content; intentionally excludes
+      /* Typeface — Roboto Slab on text content; intentionally excludes
          [class*="st-"] and bare [data-testid] to avoid clobbering
          Streamlit's internal Material Symbols icon font. */
       html, body, .stApp, button, input, textarea, select,
@@ -113,7 +113,7 @@ st.markdown(
       [data-testid="stHeading"],
       [data-testid="stText"],
       [data-testid="stWidgetLabel"] {{
-        font-family: 'Archivo', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+        font-family: 'Roboto Slab', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
       }}
 
       /* Base surfaces (override config.toml so the toggle can flip the theme) */
@@ -146,7 +146,7 @@ st.markdown(
       }}
       .brand-mark {{ font-size: 1.7rem; line-height: 1; }}
       .brand-title {{
-        font-family: 'Laripagi', 'Archivo', sans-serif !important;
+        font-family: 'Laripagi', 'Roboto Slab', serif !important;
         font-size: 1.9rem !important; font-weight: 400; letter-spacing: 0.01em;
         background: linear-gradient(90deg, #f3f5fa 20%, #e8b84b 100%);
         -webkit-background-clip: text;
