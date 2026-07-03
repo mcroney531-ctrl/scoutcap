@@ -1210,73 +1210,90 @@ if st.session_state.view == "all":
             st.session_state.view = "home"
             st.rerun()
 
-    # Filters
-    fc1, fc2, fc3 = st.columns([3, 2, 3])
-    _all_pos  = fc1.multiselect("Position", ["QB","RB","WR","TE"],
-                                default=["QB","RB","WR","TE"], key="all_pos")
-    _all_sort = fc2.selectbox("Sort by", list(SORT_FIELDS.keys()), key="all_sort")
-    _all_search = fc3.text_input("Search", placeholder="Filter by name…", key="all_search",
-                                 label_visibility="collapsed")
+    # Search filter (global across all bins)
+    _all_search = st.text_input("Search", placeholder="Filter by name…", key="all_search",
+                                label_visibility="collapsed")
 
-    def _sv_all(r):
-        v = r.get(SORT_FIELDS[_all_sort])
-        if v is None or v == "":
-            return (1, "")
-        return (0, v.lower() if isinstance(v, str) else v)
-
-    _all_rows = [
-        r for r in rookies
-        if r["position"] in _all_pos
-        and (not _all_search or _all_search.lower() in r["full_name"].lower())
+    POS_CONFIG = [
+        ("QB", "🟦", "#3b82f6", "#1e40af", "#dbeafe55", "#dbeafe"),
+        ("RB", "🟩", "#3fb950", "#166534", "#dcfce755", "#dcfce7"),
+        ("WR", "🟨", "#e8b84b", "#92400e", "#fef9c355", "#fef9c3"),
+        ("TE", "🟧", "#e3873c", "#9a3412", "#ffedd555", "#ffedd5"),
     ]
-    _all_rows = sorted(_all_rows, key=_sv_all)
 
-    st.caption(f"{len(_all_rows)} prospects · click **Generate Report** to run the full scouting pipeline")
-    st.divider()
+    for _pos, _ico, _pc, _header_color, _bg, _border_fill in POS_CONFIG:
+        _bin = [
+            r for r in rookies
+            if r["position"] == _pos
+            and (not _all_search or _all_search.lower() in r["full_name"].lower())
+        ]
+        if not _bin:
+            continue
 
-    POS_COLOR_MAP = {"QB": "#3b82f6", "RB": "#3fb950", "WR": "#e8b84b", "TE": "#e3873c"}
-    POS_ICON_MAP  = {"QB": "🟦", "RB": "🟩", "WR": "🟨", "TE": "🟧"}
+        _scouted = sum(1 for r in _bin if r["player_id"] in st.session_state.analysis_cache)
+        _label = f"{_ico} {_pos}  ·  {len(_bin)} players" + (f"  ·  {_scouted} scouted ✓" if _scouted else "")
 
-    for _r in _all_rows[:120]:
-        _pos  = _r.get("position", "")
-        _team = _r.get("team") or "FA"
-        _col  = _r.get("college") or "—"
-        _pc   = POS_COLOR_MAP.get(_pos, P["muted"])
-        _ico  = POS_ICON_MAP.get(_pos, "⬜")
-        _cached = _r["player_id"] in st.session_state.analysis_cache
-        _done_badge = " ✓" if _cached else ""
-
-        left_col, right_col = st.columns([5, 1])
-
-        with left_col:
+        with st.expander(_label, expanded=(_pos == "QB")):
+            # Column header row
             st.markdown(
-                f"<div style='padding:6px 4px 2px 4px;'>"
-                f"<span style='font-weight:700;font-size:0.92rem;color:{P['text']};'>"
-                f"{_ico} {_r['full_name']}</span>"
-                f"<span style='font-size:0.8rem;color:{_pc};font-weight:600;margin-left:8px;'>{_pos}</span>"
-                f"<span style='font-size:0.8rem;color:{P['muted']};margin-left:6px;'>· {_team} · {_col}</span>"
-                f"</div>",
+                f"<div style='display:grid;grid-template-columns:1fr 90px 90px 1fr 80px 40px;"
+                f"gap:0 8px;padding:4px 6px 6px 6px;'>"
+                f"<span style='font-size:0.72rem;font-weight:700;color:{P['muted']};text-transform:uppercase;letter-spacing:.05em;'>Player</span>"
+                f"<span style='font-size:0.72rem;font-weight:700;color:{P['muted']};text-transform:uppercase;letter-spacing:.05em;'>Team</span>"
+                f"<span style='font-size:0.72rem;font-weight:700;color:{P['muted']};text-transform:uppercase;letter-spacing:.05em;'>Depth</span>"
+                f"<span style='font-size:0.72rem;font-weight:700;color:{P['muted']};text-transform:uppercase;letter-spacing:.05em;'>College</span>"
+                f"<span style='font-size:0.72rem;font-weight:700;color:{P['muted']};text-transform:uppercase;letter-spacing:.05em;'></span>"
+                f"<span></span>"
+                f"</div>"
+                f"<hr style='margin:0 0 4px 0;border:none;border-top:2px solid {_pc}44;'>",
                 unsafe_allow_html=True,
             )
-            if st.button(
-                f"Generate Report{_done_badge}",
-                key=f"gen_{_r['player_id']}",
-                help=f"Run full scouting pipeline for {_r['full_name']}",
-            ):
-                show_report_overlay(_r)
 
-        with right_col:
-            _is_fav = _r["player_id"] in st.session_state.shortlist
-            if st.button("★" if _is_fav else "☆", key=f"fav_all_{_r['player_id']}",
-                         use_container_width=True, help="Track on My Board"):
-                if _is_fav:
-                    st.session_state.shortlist.remove(_r["player_id"])
-                else:
-                    st.session_state.shortlist.append(_r["player_id"])
-                st.rerun()
+            for _r in _bin:
+                _team  = _r.get("team") or "FA"
+                _depth = _r.get("depth_chart_order") or "—"
+                _col   = _r.get("college") or "—"
+                _cached = _r["player_id"] in st.session_state.analysis_cache
+                _done_badge = " ✓" if _cached else ""
 
-        st.markdown(f"<hr style='margin:0;border:none;border-top:1px solid {P['border']};'>",
-                    unsafe_allow_html=True)
+                left_col, right_col = st.columns([6, 1])
+
+                with left_col:
+                    st.markdown(
+                        f"<div style='display:grid;grid-template-columns:1fr 90px 90px 1fr;"
+                        f"gap:0 8px;align-items:center;padding:5px 6px 0 6px;'>"
+                        f"<span style='font-weight:700;font-size:0.88rem;color:{P['text']};'>{_r['full_name']}</span>"
+                        f"<span style='font-size:0.83rem;color:{P['text']};'>{_team}</span>"
+                        f"<span style='font-size:0.83rem;color:{P['muted']};'>{_depth}</span>"
+                        f"<span style='font-size:0.8rem;color:{P['muted']};'>{_col}</span>"
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+                    if st.button(
+                        f"Generate Report{_done_badge}",
+                        key=f"gen_{_r['player_id']}",
+                        help=f"Run full scouting pipeline for {_r['full_name']}",
+                    ):
+                        show_report_overlay(_r)
+
+                with right_col:
+                    _is_fav = _r["player_id"] in st.session_state.shortlist
+                    if st.button(
+                        "★" if _is_fav else "☆",
+                        key=f"fav_all_{_r['player_id']}",
+                        use_container_width=True,
+                        help="Track on My Board",
+                    ):
+                        if _is_fav:
+                            st.session_state.shortlist.remove(_r["player_id"])
+                        else:
+                            st.session_state.shortlist.append(_r["player_id"])
+                        st.rerun()
+
+                st.markdown(
+                    f"<hr style='margin:0;border:none;border-top:1px solid {P['border']};'>",
+                    unsafe_allow_html=True,
+                )
 
     st.stop()
 
