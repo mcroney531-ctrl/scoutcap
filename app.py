@@ -47,6 +47,25 @@ _secret_errors = _init_secrets()
 
 NAVY = "#212F52"  # brand primary
 
+
+@st.cache_data
+def _brand_font_face() -> str:
+    """Embed the Laripagi display font as a base64 @font-face rule so it
+    works on Streamlit Cloud without static-file serving. Empty string if
+    the font file is missing."""
+    import base64
+    path = os.path.join(os.path.dirname(__file__), "assets", "Laripagi-Trial.otf")
+    try:
+        with open(path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode("ascii")
+    except Exception:
+        return ""
+    return (
+        "@font-face{font-family:'Laripagi';"
+        f"src:url(data:font/otf;base64,{b64}) format('opentype');"
+        "font-weight:normal;font-style:normal;font-display:swap;}"
+    )
+
 PALETTES = {
     "dark": {
         "app_bg": "#0d1322",
@@ -80,6 +99,7 @@ P = PALETTES["light"] if _light else PALETTES["dark"]
 st.markdown(
     f"""
     <style>
+      {_brand_font_face()}
       @import url('https://fonts.googleapis.com/css2?family=SN+Pro:ital,wght@0,300;0,400;0,600;0,700;0,800;1,400&display=swap');
 
       /* Typeface — SN Pro on text content; intentionally excludes
@@ -122,12 +142,13 @@ st.markdown(
       }}
       .brand-mark {{ font-size: 1.7rem; line-height: 1; }}
       .brand-title {{
-        font-size: 1.35rem; font-weight: 800; letter-spacing: -0.01em;
+        font-family: 'Laripagi', 'SN Pro', sans-serif !important;
+        font-size: 1.9rem !important; font-weight: 400; letter-spacing: 0.01em;
         background: linear-gradient(90deg, #f3f5fa 20%, #e8b84b 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
-        margin: 0;
+        margin: 0; line-height: 1.1;
       }}
       .brand-sub {{ font-size: 0.8rem; color: #aeb8cc !important; margin: 0.1rem 0 0 0; }}
 
