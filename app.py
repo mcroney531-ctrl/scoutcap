@@ -1501,6 +1501,38 @@ if st.session_state.selected_player is None:
             st.session_state.view = "all"
             st.rerun()
 
+    # JS: walk up from each marker to its stVerticalBlockBorderWrapper ancestor and apply gradient
+    import streamlit.components.v1 as _components
+    _components.html("""<script>
+    (function() {
+        var CARDS = [
+            {id:'hc-board', bg:'linear-gradient(135deg,#f0f7ff 0%,#dbeafe 100%)', border:'3px solid #3b82f6'},
+            {id:'hc-mock',  bg:'linear-gradient(135deg,#fffdf0 0%,#fef9c3 100%)', border:'3px solid #e8b84b'},
+            {id:'hc-all',   bg:'linear-gradient(135deg,#f0fdf4 0%,#dcfce7 100%)', border:'3px solid #3fb950'},
+        ];
+        function apply() {
+            var doc = window.parent.document;
+            CARDS.forEach(function(c) {
+                var marker = doc.getElementById(c.id);
+                if (!marker) return;
+                var el = marker;
+                while (el) {
+                    if (el.getAttribute && el.getAttribute('data-testid') === 'stVerticalBlockBorderWrapper') {
+                        el.style.setProperty('background', c.bg, 'important');
+                        el.style.setProperty('border', c.border, 'important');
+                        el.style.setProperty('border-radius', '16px', 'important');
+                        break;
+                    }
+                    el = el.parentElement;
+                }
+            });
+        }
+        apply();
+        setTimeout(apply, 200);
+        setTimeout(apply, 600);
+    })();
+    </script>""", height=0, scrolling=False)
+
     st.stop()
 
 player = st.session_state.selected_player
