@@ -206,8 +206,26 @@ st.markdown(
       div[class*="st-key-prow_"] div[data-testid="stColumn"] {{
         min-width: 0 !important;
       }}
-      div[class*="st-key-prow_"] div[data-testid="stColumn"] .stButton > button {{
-        padding: 0.15rem 0.2rem !important;
+      /* Standalone star — strip all button chrome, just the emoji.
+         Target the button directly (help= tooltip adds span wrappers that
+         break the .stButton > button direct-child combinator). */
+      div[class*="st-key-prow_"] button {{
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        min-height: 0 !important;
+        font-size: 1.25rem !important;
+        line-height: 1 !important;
+      }}
+      div[class*="st-key-prow_"] button:hover {{
+        background: transparent !important;
+        box-shadow: none !important;
+        transform: scale(1.15) !important;
+      }}
+      div[class*="st-key-prow_"] button:active {{
+        background: transparent !important;
+        box-shadow: none !important;
       }}
     </style>
     """,
@@ -1194,6 +1212,7 @@ with st.sidebar:
         if st.button("🏠 Home", key="sidebar_home_nav", use_container_width=True):
             st.session_state.selected_player = None
             st.session_state.view = "home"
+            st.session_state._collapse_on_home = True
             st.rerun()
 
     st.toggle("☀️ Light mode", key="ui_light_mode", value=True, help="Toggle between light (default) and dark navy theme")
@@ -1439,6 +1458,22 @@ if st.session_state.view == "mock":
 
 
 if st.session_state.selected_player is None:
+    # Collapse the sidebar once when arriving home via the Home button.
+    if st.session_state.pop("_collapse_on_home", False):
+        import streamlit.components.v1 as _components
+        _components.html(
+            """<script>
+            (function() {
+                var sb = window.parent.document.querySelector('section[data-testid="stSidebar"]');
+                if (sb && sb.getBoundingClientRect().width > 50) {
+                    var btn = sb.querySelector('button');
+                    if (btn) btn.click();
+                }
+            })();
+            </script>""",
+            height=0, scrolling=False,
+        )
+
     brand_bar("Three-agent dynasty draft evaluation engine")
 
     # How it works — folded away so the landing page stays open
