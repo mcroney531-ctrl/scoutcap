@@ -99,8 +99,8 @@ P = PALETTES["light"] if _light else PALETTES["dark"]
 st.markdown(
     f"""
     <style>
-      {_brand_font_face()}
       @import url('https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@300;400;500;600;700;800&display=swap');
+      {_brand_font_face()}
 
       /* Typeface — Roboto Slab on text content; intentionally excludes
          [class*="st-"] and bare [data-testid] to avoid clobbering
