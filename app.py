@@ -308,13 +308,18 @@ if _light:
           box-shadow: 6px 6px 14px #cdd1e0, -6px -6px 14px #ffffff !important;
         }
 
-        /* ── Expanders — outset / raised ── */
+        /* ── Expanders — outset / raised, light-gray fill so content pops ── */
         div[data-testid="stExpander"] {
-          background: #f7faff !important;
+          background: #e8ebf2 !important;
           border: none !important;
           border-radius: 12px !important;
           box-shadow: 5px 5px 12px #cdd1e0, -5px -5px 12px #ffffff !important;
           overflow: hidden;
+        }
+        /* Expander inner content inherits the gray surface */
+        div[data-testid="stExpander"] details,
+        div[data-testid="stExpander"] summary {
+          background: transparent !important;
         }
 
         /* ── Toggle widget ── */
@@ -414,7 +419,27 @@ def _hex_lum(hx: str) -> float:
     """Relative luminance (0=black, 1=white) of a #RRGGBB color."""
     hx = hx.lstrip("#")
     r, g, b = (int(hx[i:i+2], 16) / 255 for i in (0, 2, 4))
-    return 0.2126 * r + 0.7152 * g + 0.114 * b
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def _mix_white(hx: str, t: float) -> str:
+    """Blend a color toward white by fraction t (0=orig, 1=white)."""
+    hx = hx.lstrip("#")
+    r, g, b = (int(hx[i:i+2], 16) for i in (0, 2, 4))
+    r = round(r + (255 - r) * t)
+    g = round(g + (255 - g) * t)
+    b = round(b + (255 - b) * t)
+    return f"#{r:02X}{g:02X}{b:02X}"
+
+
+def _contrast_floor(hx: str, min_lum: float = 0.13) -> str:
+    """Lift near-black colors to a minimum luminance so they read as a
+    distinct dark tone (not flat black) — keeps hue by mixing toward white."""
+    t = 0.0
+    while t <= 1.0 and _hex_lum(hx) < min_lum:
+        hx = _mix_white(hx, 0.06)
+        t += 0.06
+    return hx
 
 
 def team_colors(team: str) -> tuple[str, str]:
@@ -423,9 +448,10 @@ def team_colors(team: str) -> tuple[str, str]:
 
 
 def team_darkest(team: str) -> str:
-    """The darker of a team's two colors — used for readable text tinting."""
+    """The darker of a team's two colors, lifted off pure black for readability."""
     c1, c2 = team_colors(team)
-    return c1 if _hex_lum(c1) <= _hex_lum(c2) else c2
+    darkest = c1 if _hex_lum(c1) <= _hex_lum(c2) else c2
+    return _contrast_floor(darkest)
 
 
 SORT_FIELDS = {
@@ -1301,7 +1327,8 @@ if st.session_state.view == "all":
 
     # Per-player team-gradient border on each report button (targets the
     # .st-key-gen_<pid> class Streamlit adds from the button's key).
-    _fill = P["app_bg"]
+    # White inner fill so buttons pop against the gray bin background.
+    _fill = "#ffffff"
     _btn_rules = []
     for _r in rookies:
         _t = _r.get("team") or "FA"
