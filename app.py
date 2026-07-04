@@ -833,21 +833,6 @@ def render_prospect_table(all_rows, key_prefix):
 
 # ── Mock Draft Simulator helpers ──────────────────────────────────────────────
 
-# ─── TEMP DEMO ADP OVERRIDE — REVERT AFTER RECORDING ──────────────────────────
-# Forces a few prospects to specific draft positions for the demo video so the
-# CPU board matches consensus. Overridden players also skip variance noise.
-# Remove this dict + the two blocks that reference it to restore normal ADP.
-# Scores are calibrated to the sorted-INDEX (not the value): the mock draft
-# orders players by their rank position, and Sleeper rookie ranks are sparse.
-_DEMO_ADP_OVERRIDE = {
-    "Ty Simpson": 100.0,        # → ~index 7  → ~1.07 (mid 1st)
-    "De'Zhaun Stribling": 125.0,  # → ~index 11 → ~1.11-1.12 (1.10-2.05 range)
-    "Emmett Johnson": 215.0,     # → ~index 29 → ~3.05 (3rd round, buffered)
-    "Mike Washington": 225.0,    # → ~index 30 → ~3.06 (3rd round, buffered)
-}
-# ──────────────────────────────────────────────────────────────────────────────
-
-
 def _get_adp_ranking(rookies: list) -> list:
     """Rank prospects by estimated ADP. Sleeper search_rank primary; FC dynasty
     value fallback for players without a Sleeper rank."""
@@ -864,11 +849,7 @@ def _get_adp_ranking(rookies: list) -> list:
             score = 10000.0 - fc_rec.get("dynasty_value", 0)
         else:
             score = 999999.0
-        _demo_ov = _DEMO_ADP_OVERRIDE.get(r.get("full_name"))  # TEMP demo
-        _locked = _demo_ov is not None
-        if _locked:
-            score = _demo_ov
-        out.append({**r, "_adp_score": score, "_demo_locked": _locked})
+        out.append({**r, "_adp_score": score})
     return sorted(out, key=lambda x: x["_adp_score"])
 
 
@@ -974,11 +955,7 @@ def _start_draft(slot: int, pins: dict, variance: int, rookies: list,
     pool = []
     for i, p in enumerate(adp):
         if str(p["player_id"]) not in pinned_ids:
-            # TEMP demo: locked players skip noise so they land at their fixed slot
-            if p.get("_demo_locked"):
-                noise = 0
-            else:
-                noise = random.gauss(0, variance) if variance > 0 else 0
+            noise = random.gauss(0, variance) if variance > 0 else 0
             pool.append((i + noise, p))
     pool.sort(key=lambda x: x[0])
 
