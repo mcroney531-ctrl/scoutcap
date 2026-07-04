@@ -410,6 +410,24 @@ NFL_TEAM_COLORS = {
 }
 
 
+def _hex_lum(hx: str) -> float:
+    """Relative luminance (0=black, 1=white) of a #RRGGBB color."""
+    hx = hx.lstrip("#")
+    r, g, b = (int(hx[i:i+2], 16) / 255 for i in (0, 2, 4))
+    return 0.2126 * r + 0.7152 * g + 0.114 * b
+
+
+def team_colors(team: str) -> tuple[str, str]:
+    """(primary, secondary) for a team; navy pair fallback for FA/unknown."""
+    return NFL_TEAM_COLORS.get(team, (NAVY, "#4a6fa5"))
+
+
+def team_darkest(team: str) -> str:
+    """The darker of a team's two colors — used for readable text tinting."""
+    c1, c2 = team_colors(team)
+    return c1 if _hex_lum(c1) <= _hex_lum(c2) else c2
+
+
 SORT_FIELDS = {
     "Sleeper Rank": "search_rank",
     "Name": "full_name",
@@ -1281,6 +1299,25 @@ if st.session_state.view == "all":
     _all_search = st.text_input("Search", placeholder="Filter by name…", key="all_search",
                                 label_visibility="collapsed")
 
+    # Per-player team-gradient border on each report button (targets the
+    # .st-key-gen_<pid> class Streamlit adds from the button's key).
+    _fill = P["app_bg"]
+    _btn_rules = []
+    for _r in rookies:
+        _t = _r.get("team") or "FA"
+        _p1, _p2 = team_colors(_t)
+        _dk = team_darkest(_t)
+        _btn_rules.append(
+            f".st-key-gen_{_r['player_id']} button{{"
+            f"border:2px solid transparent !important;"
+            f"background-image:linear-gradient({_fill},{_fill}),"
+            f"linear-gradient(90deg,{_p1},{_p2}) !important;"
+            f"background-origin:border-box !important;"
+            f"background-clip:padding-box,border-box !important;"
+            f"box-shadow:none !important;color:{_dk} !important;font-weight:700 !important;}}"
+        )
+    st.markdown("<style>" + "".join(_btn_rules) + "</style>", unsafe_allow_html=True)
+
     POS_CONFIG = [
         ("QB", "🟦", "#3b82f6", "#1e40af", "#dbeafe55", "#dbeafe"),
         ("RB", "🟩", "#3fb950", "#166534", "#dcfce755", "#dcfce7"),
@@ -1323,21 +1360,23 @@ if st.session_state.view == "all":
                 _cached = _r["player_id"] in st.session_state.analysis_cache
                 _done_badge = " ✓" if _cached else ""
                 _is_fav = _r["player_id"] in st.session_state.shortlist
+                _dark  = team_darkest(_team)          # readable team-colored text
+                _c1, _c2 = team_colors(_team)         # primary + secondary for gradients
 
                 # Info row: Player | Age | Team | ⭐ toggle (kept horizontal on mobile)
                 with st.container(key=f"prow_{_r['player_id']}"):
                     rc1, rc2, rc3, rc4 = st.columns([3, 1, 1, 0.6])
                     rc1.markdown(
                         f"<div style='padding-top:6px;font-weight:700;font-size:0.88rem;"
-                        f"color:{P['text']};'>{_r['full_name']}</div>",
+                        f"color:{_dark};'>{_r['full_name']}</div>",
                         unsafe_allow_html=True,
                     )
                     rc2.markdown(
-                        f"<div style='padding-top:6px;font-size:0.83rem;color:{P['muted']};text-align:center;'>{_age_s}</div>",
+                        f"<div style='padding-top:6px;font-size:0.83rem;color:{_dark};text-align:center;'>{_age_s}</div>",
                         unsafe_allow_html=True,
                     )
                     rc3.markdown(
-                        f"<div style='padding-top:6px;font-size:0.83rem;color:{P['text']};text-align:center;'>{_team}</div>",
+                        f"<div style='padding-top:6px;font-size:0.83rem;font-weight:700;color:{_dark};text-align:center;'>{_team}</div>",
                         unsafe_allow_html=True,
                     )
                     with rc4:
@@ -1353,17 +1392,19 @@ if st.session_state.view == "all":
                                 st.session_state.shortlist.append(_r["player_id"])
                             st.rerun()
 
-                # Full-width Generate Report button
+                # Full-width report button — team-gradient border applied via CSS below
                 if st.button(
-                    f"Generate Report{_done_badge}",
+                    f"View Scouting Report{_done_badge}",
                     key=f"gen_{_r['player_id']}",
                     use_container_width=True,
                     help=f"Run full scouting pipeline for {_r['full_name']}",
                 ):
                     show_report_overlay(_r)
 
+                # Divider — team primary→secondary gradient
                 st.markdown(
-                    f"<hr style='margin:2px 0 0 0;border:none;border-top:1px solid {P['border']};'>",
+                    f"<div style='height:2px;margin:6px 0 0 0;border-radius:2px;"
+                    f"background:linear-gradient(90deg,{_c1},{_c2});opacity:0.55;'></div>",
                     unsafe_allow_html=True,
                 )
 
