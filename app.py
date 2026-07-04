@@ -110,6 +110,10 @@ st.markdown(
       [data-testid="stMarkdownContainer"],
       [data-testid="stMarkdownContainer"] h1, [data-testid="stMarkdownContainer"] h2,
       [data-testid="stMarkdownContainer"] h3, [data-testid="stMarkdownContainer"] h4,
+      [data-testid="stMarkdownContainer"] p,
+      [data-testid="stMarkdownContainer"] li,
+      [data-testid="stCaptionContainer"],
+      [data-testid="stCaptionContainer"] p,
       [data-testid="stHeading"],
       [data-testid="stText"],
       [data-testid="stWidgetLabel"] {{
