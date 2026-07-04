@@ -346,6 +346,11 @@ if _light:
           border: 2px solid #212F52 !important;
           box-shadow: 4px 6px 16px rgba(17,28,56,0.35) !important;
         }
+        /* Scouting-report "❓ Why?" popover triggers — same navy stroke + shadow */
+        div[class*="st-key-whybtn_"] button {
+          border: 2px solid #212F52 !important;
+          box-shadow: 4px 6px 16px rgba(17,28,56,0.35) !important;
+        }
 
         /* ── Toggle widget ── */
         div[data-testid="stToggle"] > label {
@@ -659,14 +664,15 @@ def show_report_overlay(player: dict):
         ("Roster Need", roster_need, None, _explain_roster),
     ]
     _gcols = st.columns(4)
-    for _col, (_lbl, _val, _delta, _explain) in zip(_gcols, _grades):
+    for _i, (_col, (_lbl, _val, _delta, _explain)) in enumerate(zip(_gcols, _grades)):
         with _col:
             if _delta:
                 st.metric(_lbl, _val, _delta)
             else:
                 st.metric(_lbl, _val)
-            with st.popover("❓ Why?", use_container_width=True):
-                st.markdown(_explain())
+            with st.container(key=f"whybtn_{_i}"):
+                with st.popover("❓ Why?", use_container_width=True):
+                    st.markdown(_explain())
     st.divider()
 
     pc1, pc2, pc3 = st.columns(3)
