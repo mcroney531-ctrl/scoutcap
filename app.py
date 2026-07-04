@@ -80,7 +80,7 @@ PALETTES = {
         "grade_c": "#e8b84b",
     },
     "light": {
-        "app_bg": "#f7faff",
+        "app_bg": "#d1d6de",
         "sidebar_bg": "#eaeef5",
         "panel": "#ffffff",
         "panel_2": "#eef1f6",
