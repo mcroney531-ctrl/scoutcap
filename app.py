@@ -340,8 +340,9 @@ if _light:
         div[data-testid="stExpander"] summary {
           background: transparent !important;
         }
-        /* "How it Works" — dark outer stroke + deeper shadow */
-        .st-key-hiw_card div[data-testid="stExpander"] {
+        /* "How it Works" + All-Prospects position bins — dark stroke + deeper shadow */
+        .st-key-hiw_card div[data-testid="stExpander"],
+        div[class*="st-key-bin_"] div[data-testid="stExpander"] {
           border: 2px solid #212F52 !important;
           box-shadow: 4px 6px 16px rgba(17,28,56,0.35) !important;
         }
@@ -1414,7 +1415,8 @@ if st.session_state.view == "all":
         _scouted = sum(1 for r in _bin if r["player_id"] in st.session_state.analysis_cache)
         _label = f"{_ico} {_pos}  ·  {len(_bin)} players" + (f"  ·  {_scouted} scouted ✓" if _scouted else "")
 
-        with st.expander(_label, expanded=False):
+        _bin_wrap = st.container(key=f"bin_{_pos}")
+        with _bin_wrap, st.expander(_label, expanded=False):
             # Column header row (Player | Age | Team | ⭐) — same column ratios
             # as the data rows so everything aligns.
             _hdr_css = (f"font-size:0.72rem;font-weight:700;color:{P['muted']};"
