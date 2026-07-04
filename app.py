@@ -351,6 +351,13 @@ if _light:
           border: 2px solid #212F52 !important;
           box-shadow: 4px 6px 16px rgba(17,28,56,0.35) !important;
         }
+        /* The "❓ Why?" popover panel itself — same navy stroke + shadow */
+        div[data-testid="stPopoverBody"],
+        [data-baseweb="popover"] [data-testid="stPopoverBody"] {
+          border: 2px solid #212F52 !important;
+          box-shadow: 4px 6px 16px rgba(17,28,56,0.35) !important;
+          border-radius: 10px !important;
+        }
 
         /* ── Toggle widget ── */
         div[data-testid="stToggle"] > label {
