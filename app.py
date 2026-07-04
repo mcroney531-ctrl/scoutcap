@@ -125,7 +125,20 @@ st.markdown(
         background-color: {P['app_bg']}; color: {P['text']};
       }}
       [data-testid="stHeader"] {{ background: transparent; }}
-      section[data-testid="stSidebar"] {{ background-color: {P['sidebar_bg']}; }}
+      /* Sidebar — navy gradient matching the Rookie Scout banner */
+      section[data-testid="stSidebar"] {{
+        background: linear-gradient(180deg, #111c38 0%, #212F52 55%, #2d5499 100%) !important;
+      }}
+      section[data-testid="stSidebar"] h1,
+      section[data-testid="stSidebar"] h2,
+      section[data-testid="stSidebar"] h3,
+      section[data-testid="stSidebar"] p,
+      section[data-testid="stSidebar"] label,
+      section[data-testid="stSidebar"] span,
+      section[data-testid="stSidebar"] [data-testid="stCaptionContainer"],
+      section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] * {{
+        color: #f3f5fa !important;
+      }}
       .stApp p, .stApp label, .stApp li,
       .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp span,
       [data-testid="stMarkdownContainer"] {{ color: {P['text']}; }}
@@ -268,18 +281,24 @@ if _light:
           transform: translateY(0);
         }
 
-        /* ── Sidebar draft-board buttons (base = sidebar_bg #eaeef5) ── */
+        /* ── Sidebar nav buttons — glassy on the navy gradient ── */
         section[data-testid="stSidebar"] .stButton > button {
-          background: #eaeef5 !important;
-          border: none !important;
-          box-shadow: 3px 3px 8px #c4c8d3, -3px -3px 8px #ffffff !important;
+          background: rgba(255,255,255,0.08) !important;
+          color: #f3f5fa !important;
+          border: 1px solid rgba(255,255,255,0.18) !important;
+          box-shadow: none !important;
+        }
+        section[data-testid="stSidebar"] .stButton > button * {
+          color: #f3f5fa !important;
         }
         section[data-testid="stSidebar"] .stButton > button:hover {
-          background: #eaeef5 !important;
-          box-shadow: 2px 2px 5px #c4c8d3, -2px -2px 5px #ffffff !important;
+          background: rgba(255,255,255,0.16) !important;
+          border-color: #e8b84b !important;
+          box-shadow: none !important;
         }
         section[data-testid="stSidebar"] .stButton > button:active {
-          box-shadow: inset 2px 2px 5px #c4c8d3, inset -2px -2px 5px #ffffff !important;
+          background: rgba(255,255,255,0.22) !important;
+          box-shadow: none !important;
         }
 
         /* ── Inputs and textareas — inset / recessed ── */
@@ -320,6 +339,11 @@ if _light:
         div[data-testid="stExpander"] details,
         div[data-testid="stExpander"] summary {
           background: transparent !important;
+        }
+        /* "How it Works" — dark outer stroke + deeper shadow */
+        .st-key-hiw_card div[data-testid="stExpander"] {
+          border: 2px solid #212F52 !important;
+          box-shadow: 4px 6px 16px rgba(17,28,56,0.35) !important;
         }
 
         /* ── Toggle widget ── */
@@ -1584,7 +1608,8 @@ if st.session_state.selected_player is None:
     brand_bar("Three-agent dynasty draft evaluation engine")
 
     # How it works — folded away so the landing page stays open
-    with st.expander("❓ How it Works", expanded=False):
+    _hiw = st.container(key="hiw_card")
+    with _hiw, st.expander("❓ How it Works", expanded=False):
         st.markdown(
             "Select a prospect from the draft board to run a full scouting report. "
             "The three-agent pipeline evaluates **Talent**, **Opportunity**, and **Risk** "
