@@ -1200,6 +1200,7 @@ def load_rookies():
         if p.get("years_exp") == 0
         and p.get("active")
         and p.get("position") in ("QB", "RB", "WR", "TE")
+        and p.get("team")  # drop unsigned (FA) players
     ]
     rookies.sort(key=lambda p: p["search_rank"])
     return rookies
