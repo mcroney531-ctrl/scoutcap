@@ -207,11 +207,13 @@ st.markdown(
       [data-baseweb="tag"] span {{ color: #ffffff !important; }}
       [data-baseweb="tag"] svg {{ fill: #ffffff !important; color: #ffffff !important; }}
 
-      /* Prospect rows — keep Player | Age | Team | ⭐ on one line (no mobile stack) */
-      div[class*="st-key-prow_"] div[data-testid="stHorizontalBlock"] {{
+      /* Prospect rows + header — keep Player | Age | Team | ⭐ on one line (no mobile stack) */
+      div[class*="st-key-prow_"] div[data-testid="stHorizontalBlock"],
+      div[class*="st-key-phdr_"] div[data-testid="stHorizontalBlock"] {{
         flex-wrap: nowrap !important; gap: 8px !important; align-items: center;
       }}
-      div[class*="st-key-prow_"] div[data-testid="stColumn"] {{
+      div[class*="st-key-prow_"] div[data-testid="stColumn"],
+      div[class*="st-key-phdr_"] div[data-testid="stColumn"] {{
         min-width: 0 !important;
       }}
       /* Standalone star — strip all button chrome, just the emoji.
@@ -1299,15 +1301,17 @@ if st.session_state.view == "all":
         _label = f"{_ico} {_pos}  ·  {len(_bin)} players" + (f"  ·  {_scouted} scouted ✓" if _scouted else "")
 
         with st.expander(_label, expanded=False):
-            # Column header row (Player | Age | Team | ⭐)
+            # Column header row (Player | Age | Team | ⭐) — same column ratios
+            # as the data rows so everything aligns.
+            _hdr_css = (f"font-size:0.72rem;font-weight:700;color:{P['muted']};"
+                        f"text-transform:uppercase;letter-spacing:.05em;")
+            with st.container(key=f"phdr_{_pos}"):
+                hc1, hc2, hc3, hc4 = st.columns([3, 1, 1, 0.6])
+                hc1.markdown(f"<div style='{_hdr_css}text-align:left;'>Player</div>", unsafe_allow_html=True)
+                hc2.markdown(f"<div style='{_hdr_css}text-align:center;'>Age</div>", unsafe_allow_html=True)
+                hc3.markdown(f"<div style='{_hdr_css}text-align:center;'>Team</div>", unsafe_allow_html=True)
+                hc4.markdown("<div></div>", unsafe_allow_html=True)
             st.markdown(
-                f"<div style='display:grid;grid-template-columns:3fr 1fr 1fr 0.6fr;"
-                f"gap:0 8px;padding:4px 6px 6px 6px;'>"
-                f"<span style='font-size:0.72rem;font-weight:700;color:{P['muted']};text-transform:uppercase;letter-spacing:.05em;'>Player</span>"
-                f"<span style='font-size:0.72rem;font-weight:700;color:{P['muted']};text-transform:uppercase;letter-spacing:.05em;'>Age</span>"
-                f"<span style='font-size:0.72rem;font-weight:700;color:{P['muted']};text-transform:uppercase;letter-spacing:.05em;'>Team</span>"
-                f"<span></span>"
-                f"</div>"
                 f"<hr style='margin:0 0 4px 0;border:none;border-top:2px solid {_pc}44;'>",
                 unsafe_allow_html=True,
             )
@@ -1329,11 +1333,11 @@ if st.session_state.view == "all":
                         unsafe_allow_html=True,
                     )
                     rc2.markdown(
-                        f"<div style='padding-top:6px;font-size:0.83rem;color:{P['muted']};'>{_age_s}</div>",
+                        f"<div style='padding-top:6px;font-size:0.83rem;color:{P['muted']};text-align:center;'>{_age_s}</div>",
                         unsafe_allow_html=True,
                     )
                     rc3.markdown(
-                        f"<div style='padding-top:6px;font-size:0.83rem;color:{P['text']};'>{_team}</div>",
+                        f"<div style='padding-top:6px;font-size:0.83rem;color:{P['text']};text-align:center;'>{_team}</div>",
                         unsafe_allow_html=True,
                     )
                     with rc4:
