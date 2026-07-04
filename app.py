@@ -318,6 +318,13 @@ if _light:
           border-radius: 10px !important;
           box-shadow: inset 3px 3px 7px #cdd1e0, inset -3px -3px 7px #ffffff !important;
         }
+        /* The multiselect's inner search input must stay transparent — otherwise
+           the neumorphic input rule paints it as a white blob over the tags. */
+        .stApp [data-baseweb="select"] input {
+          background: transparent !important;
+          box-shadow: none !important;
+          border-radius: 0 !important;
+        }
 
         /* ── Metric cards — outset / raised ── */
         div[data-testid="stMetric"] {
