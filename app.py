@@ -351,15 +351,32 @@ if _light:
           border: 3px solid #6b6890 !important;
           border-radius: 16px !important;
         }
-        /* Light text on the deep-fill cards */
+        /* Pure-white text on the deep-fill cards */
         .st-key-hc_all [data-testid="stCaptionContainer"],
         .st-key-hc_all [data-testid="stCaptionContainer"] *,
         .st-key-hc_board [data-testid="stCaptionContainer"],
         .st-key-hc_board [data-testid="stCaptionContainer"] *,
         .st-key-hc_mock [data-testid="stCaptionContainer"],
         .st-key-hc_mock [data-testid="stCaptionContainer"] * {
-          color: rgba(255,255,255,0.88) !important;
+          color: #ffffff !important;
         }
+
+        /* Card buttons — mild off-white tinted to each card, softened glow */
+        .st-key-open_all button,
+        .st-key-open_board button,
+        .st-key-open_mock button {
+          box-shadow: 2px 2px 6px rgba(20,24,40,0.16),
+                      -2px -2px 6px rgba(255,255,255,0.30) !important;
+        }
+        .st-key-open_all button:hover,
+        .st-key-open_board button:hover,
+        .st-key-open_mock button:hover {
+          box-shadow: 1px 1px 4px rgba(20,24,40,0.22) !important;
+          transform: translateY(-1px);
+        }
+        .st-key-open_all button   { background: #eaeef2 !important; }  /* steel-tinted */
+        .st-key-open_board button { background: #eaf0ed !important; }  /* sage-tinted  */
+        .st-key-open_mock button  { background: #eeecf4 !important; }  /* plum-tinted  */
         </style>""",
         unsafe_allow_html=True,
     )
