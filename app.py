@@ -333,23 +333,32 @@ if _light:
           border-radius: 16px !important;
         }
 
-        /* ── Home cards — full gradient fill + accent border per card ── */
+        /* ── Home cards — deep gradient fill + accent border per card ── */
         /* st.container(key=...) adds a .st-key-<key> class directly on the
            bordered stVerticalBlock (Streamlit 1.58 — no separate wrapper). */
+        .st-key-hc_all {
+          background: linear-gradient(135deg, #6b8296 0%, #586d82 55%, #47596c 100%) !important;
+          border: 3px solid #7d94a8 !important;
+          border-radius: 16px !important;
+        }
         .st-key-hc_board {
-          background: linear-gradient(135deg, #f0f7ff 0%, #dbeafe 100%) !important;
-          border: 3px solid #3b82f6 !important;
+          background: linear-gradient(135deg, #6d8783 0%, #5a736f 55%, #495e5b 100%) !important;
+          border: 3px solid #7d9591 !important;
           border-radius: 16px !important;
         }
         .st-key-hc_mock {
-          background: linear-gradient(135deg, #fffdf0 0%, #fef9c3 100%) !important;
-          border: 3px solid #e8b84b !important;
+          background: linear-gradient(135deg, #565478 0%, #474566 55%, #363450 100%) !important;
+          border: 3px solid #6b6890 !important;
           border-radius: 16px !important;
         }
-        .st-key-hc_all {
-          background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%) !important;
-          border: 3px solid #3fb950 !important;
-          border-radius: 16px !important;
+        /* Light text on the deep-fill cards */
+        .st-key-hc_all [data-testid="stCaptionContainer"],
+        .st-key-hc_all [data-testid="stCaptionContainer"] *,
+        .st-key-hc_board [data-testid="stCaptionContainer"],
+        .st-key-hc_board [data-testid="stCaptionContainer"] *,
+        .st-key-hc_mock [data-testid="stCaptionContainer"],
+        .st-key-hc_mock [data-testid="stCaptionContainer"] * {
+          color: rgba(255,255,255,0.88) !important;
         }
         </style>""",
         unsafe_allow_html=True,
@@ -1572,14 +1581,30 @@ if st.session_state.selected_player is None:
         with col3:
             st.info("**Synthesis Agent**\nOrchestrates both + roster need + sentiment → Pick recommendation")
 
+    # ── All Prospects card ────────────────────────────────────────────────────
+    with st.container(border=True, key="hc_all"):
+        st.markdown(
+            f"""<div style="border-left:4px solid #9fb3c4;padding:0.45rem 0.75rem;margin-bottom:0.5rem;">
+            <span style="font-size:1.05rem;font-weight:800;color:#ffffff;">
+            📊 All Prospects &nbsp;
+            <span style="background:rgba(255,255,255,0.22);color:#ffffff;border:1px solid rgba(255,255,255,0.45);
+            border-radius:999px;padding:0.1rem 0.55rem;font-size:0.85rem;">{len(rookies)}</span>
+            </span></div>""",
+            unsafe_allow_html=True,
+        )
+        st.caption("Full 2026 rookie class — sort, filter by position, and generate scouting reports.")
+        if st.button("View All Prospects →", use_container_width=True, key="open_all"):
+            st.session_state.view = "all"
+            st.rerun()
+
     # ── My Board card ─────────────────────────────────────────────────────────
     with st.container(border=True, key="hc_board"):
         n = len(st.session_state.shortlist)
         st.markdown(
-            f"""<div style="border-left:4px solid #3b82f6;padding:0.45rem 0.75rem 0.45rem 0.75rem;margin-bottom:0.5rem;">
-            <span style="font-size:1.05rem;font-weight:800;color:#1e40af;">
+            f"""<div style="border-left:4px solid #9db8b3;padding:0.45rem 0.75rem 0.45rem 0.75rem;margin-bottom:0.5rem;">
+            <span style="font-size:1.05rem;font-weight:800;color:#ffffff;">
             📋 My Board &nbsp;
-            <span style="background:#3b82f622;color:#3b82f6;border:1px solid #3b82f666;
+            <span style="background:rgba(255,255,255,0.22);color:#ffffff;border:1px solid rgba(255,255,255,0.45);
             border-radius:999px;padding:0.1rem 0.55rem;font-size:0.85rem;">{n}</span>
             </span></div>""",
             unsafe_allow_html=True,
@@ -1600,8 +1625,8 @@ if st.session_state.selected_player is None:
     # ── Mock Draft card ───────────────────────────────────────────────────────
     with st.container(border=True, key="hc_mock"):
         st.markdown(
-            """<div style="border-left:4px solid #e8b84b;padding:0.45rem 0.75rem;margin-bottom:0.5rem;">
-            <span style="font-size:1.05rem;font-weight:800;color:#92400e;">
+            """<div style="border-left:4px solid #9997c0;padding:0.45rem 0.75rem;margin-bottom:0.5rem;">
+            <span style="font-size:1.05rem;font-weight:800;color:#ffffff;">
             🎯 Mock Draft Simulator</span></div>""",
             unsafe_allow_html=True,
         )
@@ -1619,22 +1644,6 @@ if st.session_state.selected_player is None:
             st.caption("Pick live, turn-by-turn — set your slot, pin known picks, then go on the clock.")
         if st.button("Open Mock Draft →", use_container_width=True, key="open_mock"):
             st.session_state.view = "mock"
-            st.rerun()
-
-    # ── All Prospects card ────────────────────────────────────────────────────
-    with st.container(border=True, key="hc_all"):
-        st.markdown(
-            f"""<div style="border-left:4px solid #3fb950;padding:0.45rem 0.75rem;margin-bottom:0.5rem;">
-            <span style="font-size:1.05rem;font-weight:800;color:#166534;">
-            📊 All Prospects &nbsp;
-            <span style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95066;
-            border-radius:999px;padding:0.1rem 0.55rem;font-size:0.85rem;">{len(rookies)}</span>
-            </span></div>""",
-            unsafe_allow_html=True,
-        )
-        st.caption("Full 2026 rookie class — sort, filter by position, and generate scouting reports.")
-        if st.button("View All Prospects →", use_container_width=True, key="open_all"):
-            st.session_state.view = "all"
             st.rerun()
 
     st.stop()
