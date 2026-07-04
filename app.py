@@ -580,11 +580,93 @@ def show_report_overlay(player: dict):
     )
     st.write("")
 
-    c1m, c2m, c3m, c4m = st.columns(4)
-    c1m.metric("Talent Grade", talent_g, f"Score: {analysis.get('talent_score','—')}")
-    c2m.metric("Opportunity Grade", opp_g, f"Score: {analysis.get('opportunity_score','—')}")
-    c3m.metric("Composite Score", composite)
-    c4m.metric("Roster Need", roster_need)
+    # ── Grade explanations (shown in a ❓ popover under each block) ────────────
+    _risk = analysis.get("risk_modifier", {})
+    _comp = analysis.get("competition", {})
+    _up   = analysis.get("key_upside", []) or []
+    _rsk  = analysis.get("key_risks", []) or []
+
+    def _explain_talent():
+        lines = [
+            f"**Talent Grade — {talent_g}** (score {analysis.get('talent_score','—')}/100)",
+            "",
+            "Graded by the **Production Agent**, which evaluates talent independent "
+            "of landing spot: career college production, athletic profile, and "
+            "historical injury record.",
+        ]
+        if _risk:
+            lines.append(
+                f"\n**Risk:** durability {_risk.get('durability_score','—')}/5 · "
+                f"injury chance {_risk.get('injury_chance_pct','—')}%"
+            )
+        if _up:
+            lines.append("\n**What helps:**")
+            lines += [f"- ✅ {x}" for x in _up[:3]]
+        if _rsk:
+            lines.append("\n**What hurts:**")
+            lines += [f"- ⚠️ {x}" for x in _rsk[:3]]
+        return "\n".join(lines)
+
+    def _explain_opportunity():
+        lines = [
+            f"**Opportunity Grade — {opp_g}** (score {analysis.get('opportunity_score','—')}/100)",
+            "",
+            "Graded by the **Situation Agent**: depth-chart position, NFL draft "
+            "capital, and the *quality* of the veteran competition ahead — graded by "
+            "dynasty value, not just headcount. A soft depth chart reads as a plus.",
+        ]
+        if _comp:
+            vet = _comp.get("veteran_count", "—")
+            repl = _comp.get("replaceable_count")
+            head = f"\n**Competition:** {vet} ahead"
+            if repl is not None:
+                head += f" · {repl} replaceable (D/F)"
+            lines.append(head)
+            notable = _comp.get("notable", []) or []
+            if notable:
+                lines.append("Real threats: " + ", ".join(
+                    f"{c.get('name','?')} ({c.get('grade','—')})" for c in notable
+                ))
+            if _comp.get("summary"):
+                lines.append(f"\n{_comp['summary']}")
+        return "\n".join(lines)
+
+    def _explain_composite():
+        return (
+            f"**Composite Score — {composite}**\n\n"
+            "A single weighted blend of every signal:\n"
+            "- **Talent 43%**\n- **Opportunity 38%**\n- **Risk 15%**\n- **Sentiment 4%**\n\n"
+            "A positional value multiplier is applied for superflex (QBs carry a "
+            "premium). The score maps through a non-linear curve to a recommended "
+            f"draft slot.\n\n🎯 Recommended **{rec}** · 📈 Ceiling **{ceil_p}** · "
+            f"📉 Floor **{floor_p}**"
+        )
+
+    def _explain_roster():
+        note = analysis.get("roster_need_note", "") or ""
+        base = (
+            f"**Roster Need — {roster_need}**\n\n"
+            "Quality-weighted via FantasyCalc — not raw headcount. Every player you "
+            "already roster at this position is graded, so depth made of D/F-grade "
+            "players still registers as a real need."
+        )
+        return base + (f"\n\n{note}" if note else "")
+
+    _grades = [
+        ("Talent Grade", talent_g, f"Score: {analysis.get('talent_score','—')}", _explain_talent),
+        ("Opportunity Grade", opp_g, f"Score: {analysis.get('opportunity_score','—')}", _explain_opportunity),
+        ("Composite Score", composite, None, _explain_composite),
+        ("Roster Need", roster_need, None, _explain_roster),
+    ]
+    _gcols = st.columns(4)
+    for _col, (_lbl, _val, _delta, _explain) in zip(_gcols, _grades):
+        with _col:
+            if _delta:
+                st.metric(_lbl, _val, _delta)
+            else:
+                st.metric(_lbl, _val)
+            with st.popover("❓ Why?", use_container_width=True):
+                st.markdown(_explain())
     st.divider()
 
     pc1, pc2, pc3 = st.columns(3)
