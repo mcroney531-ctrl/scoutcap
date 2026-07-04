@@ -11,11 +11,17 @@ depth chart and a plus for the rookie; a single grade A/B vet is a real block.
 
 import httpx
 from collections import defaultdict
+from config.dynasty_config import LEAGUE as _LEAGUE_CFG
 
 _VALUES_URL = "https://api.fantasycalc.com/values/current"
 
-# League-matched params: 12-team, superflex (2 QB), PPR, dynasty.
-_PARAMS = {"isDynasty": "true", "numQbs": 2, "numTeams": 12, "ppr": 1}
+# League-matched params sourced from dynasty_config.py — single source of truth.
+_PARAMS = {
+    "isDynasty": "true",
+    "numQbs": _LEAGUE_CFG["num_qbs"],
+    "numTeams": _LEAGUE_CFG["num_teams"],
+    "ppr": _LEAGUE_CFG["ppr"],
+}
 
 # Grade tiers by rank within position. Near-term competition is ranked by
 # redraft value (who actually eats snaps now); dynasty value is kept for context.

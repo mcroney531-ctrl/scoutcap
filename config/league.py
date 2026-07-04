@@ -4,7 +4,7 @@ LEAGUE = {
     "rounds": 4,
     "picks_per_round": 12,
     "total_picks": 48,
-    "scoring": "PPR",
+    "scoring": "half-PPR",
     "roster_spots": {
         "QB": 1,
         "RB": 2,
