@@ -840,9 +840,10 @@ def render_prospect_table(all_rows, key_prefix):
 # Scores are calibrated to the sorted-INDEX (not the value): the mock draft
 # orders players by their rank position, and Sleeper rookie ranks are sparse.
 _DEMO_ADP_OVERRIDE = {
-    "Ty Simpson": 100.0,      # → ~index 7  → ~1.07 (mid 1st)
-    "Mike Washington": 205.0,  # → ~index 25 → ~3.01 (3rd round)
-    "Emmett Johnson": 210.0,   # → ~index 27 → ~3.03 (3rd round)
+    "Ty Simpson": 100.0,        # → ~index 7  → ~1.07 (mid 1st)
+    "De'Zhaun Stribling": 125.0,  # → ~index 11 → ~1.11-1.12 (1.10-2.05 range)
+    "Emmett Johnson": 215.0,     # → ~index 29 → ~3.05 (3rd round, buffered)
+    "Mike Washington": 225.0,    # → ~index 30 → ~3.06 (3rd round, buffered)
 }
 # ──────────────────────────────────────────────────────────────────────────────
 
