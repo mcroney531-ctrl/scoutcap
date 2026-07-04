@@ -99,10 +99,10 @@ P = PALETTES["light"] if _light else PALETTES["dark"]
 st.markdown(
     f"""
     <style>
-      @import url('https://fonts.googleapis.com/css2?family=Sansation:ital,wght@0,300;0,400;0,700;1,400&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Science+Gothic:wght@300;400;500;600;700;800&display=swap');
       {_brand_font_face()}
 
-      /* Typeface — Sansation on text content; intentionally excludes
+      /* Typeface — Science Gothic on text content; intentionally excludes
          [class*="st-"] and bare [data-testid] to avoid clobbering
          Streamlit's internal Material Symbols icon font. */
       html, body, .stApp, button, input, textarea, select,
@@ -113,7 +113,7 @@ st.markdown(
       [data-testid="stHeading"],
       [data-testid="stText"],
       [data-testid="stWidgetLabel"] {{
-        font-family: 'Sansation', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+        font-family: 'Science Gothic', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
       }}
 
       /* Base surfaces (override config.toml so the toggle can flip the theme) */
@@ -146,7 +146,7 @@ st.markdown(
       }}
       .brand-mark {{ font-size: 1.7rem; line-height: 1; }}
       .brand-title {{
-        font-family: 'Laripagi', 'Sansation', sans-serif !important;
+        font-family: 'Laripagi', 'Science Gothic', sans-serif !important;
         font-size: 1.9rem !important; font-weight: 400; letter-spacing: 0.01em;
         background: linear-gradient(90deg, #f3f5fa 20%, #e8b84b 100%);
         -webkit-background-clip: text;
