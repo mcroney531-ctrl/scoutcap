@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "scout",
-      "runtimeExecutable": "C:/Users/myfit/venvs/kaggleproj312/Scripts/streamlit.exe",
+      "runtimeExecutable": "C:/path/to/venv/Scripts/streamlit.exe",
       "runtimeArgs": ["run", "app.py", "--server.headless", "true"],
       "port": 8501
     }

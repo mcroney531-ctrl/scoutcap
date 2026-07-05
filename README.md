@@ -94,8 +94,8 @@ python mcp_server.py        # stdio
 {
   "mcpServers": {
     "rookie-scout": {
-      "command": "D:\\venvs\\kaggleproj312\\Scripts\\python.exe",
-      "args": ["C:\\Users\\myfit\\OneDrive\\Documents\\KaggleProj\\mcp_server.py"]
+      "command": "C:\\path\\to\\venv\\Scripts\\python.exe",
+      "args": ["C:\\Users\\YOUR_USERNAME\\path\\to\\mcp_server.py"]
     }
   }
 }
