@@ -1,20 +1,24 @@
-"""Hardcoded league settings — one specific league, not a generalized product."""
+"""Hardcoded league settings — one specific league, not a generalized product.
+Roster positions verified against Sleeper API 2026-07-04.
+"""
 
 LEAGUE = {
     "rounds": 4,
     "picks_per_round": 12,
     "total_picks": 48,
-    "scoring": "PPR",
+    "scoring": "half-PPR",
     "roster_spots": {
         "QB": 1,
         "RB": 2,
-        "WR": 2,
+        "WR": 3,
         "TE": 1,
-        "FLEX": 2,   # RB/WR/TE
-        "SF": 1,     # Superflex (QB/RB/WR/TE) — update if not superflex
-        "BN": 20,
+        "FLEX": 1,   # RB/WR/TE
+        "SF": 1,     # SUPER_FLEX (QB/RB/WR/TE)
+        "K": 1,
+        "BN": 14,
+        "TAXI": 4,
+        "IR": 4,
     },
-    "notes": "Update SF to False and remove if not a superflex league.",
 }
 
 # Composite weighting — locked, uniform across all positions
