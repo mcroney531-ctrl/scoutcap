@@ -731,7 +731,6 @@ def show_report_overlay(player: dict):
             st.markdown(f"⚠️ {item}")
     st.divider()
 
-    st.caption(f"**KTC Comparison:** {analysis.get('ktc_comparison','—')}")
     st.caption(f"**Roster Note:** {analysis.get('roster_need_note','—')}")
 
     # Add to shortlist shortcut
@@ -1954,7 +1953,6 @@ else:
                 st.markdown(f"⚠️ {item}")
 
         st.divider()
-        st.caption(f"**KTC Comparison:** {analysis.get('ktc_comparison', '—')}")
         st.caption(f"**Roster Note:** {analysis.get('roster_need_note', '—')}")
 
 # ── Chat thread ───────────────────────────────────────────────────────────────

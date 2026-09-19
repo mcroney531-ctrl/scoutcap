@@ -346,10 +346,6 @@ put the number of grade D/F bodies in "replaceable_count", and write a one-line 
 Weave the headline insight into your narrative (e.g. "buried on paper, but the bodies ahead
 are all replaceable — a soft room").
 
-After reaching your own conclusion, briefly compare it to KeepTradeCut dynasty value if you
-have any general knowledge of where this player sits in dynasty consensus — surface agreement
-or explain specific divergence. Do NOT fold KTC into the composite score.
-
 Output format — return a JSON object with these exact keys:
 {
   "player": "Full Name",
@@ -385,7 +381,6 @@ Output format — return a JSON object with these exact keys:
   "roster_need_note": "One sentence referencing actual roster quality (starter_quality_score, top players, real_contributors) — e.g. 'Your RB room has 11 players but only 1 grade-B contributor; this is a real need'.",
   "headline": "Talent: A- / Opportunity: C+ → Floor: 2.08, Ceiling: 1.03 → Recommended: 1.09",
   "narrative": "3-4 sentence synthesis of why this player grades where they do, what the tension is between talent and opportunity, and what scenario would push them toward ceiling vs. floor.",
-  "ktc_comparison": "One sentence comparing to KTC dynasty consensus or noting lack of data.",
   "key_risks": ["bullet risks"],
   "key_upside": ["bullet upside drivers"]
 }

@@ -7,6 +7,7 @@ Inputs:  player name
 Outputs: structured talent assessment + risk modifier
 """
 
+import datetime
 import os, sys, json, re
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
@@ -80,13 +81,27 @@ def get_career_college_stats(espn_athlete_id: str) -> dict:
     return get_college_stats(espn_athlete_id, season=None)
 
 
-def get_recent_college_stats(espn_athlete_id: str, season: int = 2024) -> dict:
+def _latest_completed_college_season() -> int:
+    """The most recent college season with a full stat line on file.
+
+    A college season is named for the year it kicks off in and finishes with
+    bowl games the following January, so at any point in year Y the last
+    complete season is Y-1: during the autumn the current one is still being
+    played, and before August it is the one that ended that January.
+    """
+    return datetime.date.today().year - 1
+
+
+def get_recent_college_stats(espn_athlete_id: str, season: int | None = None) -> dict:
     """
     Fetch single-season college production stats for an athlete.
     espn_athlete_id: the ESPN athlete ID (not the draft ID).
-    season: e.g. 2024 for their final college season.
+    season: defaults to the most recent completed college season. It used to
+      default to a hardcoded 2024, which silently returned two-year-old
+      production for anyone scouted after that — and returned nothing at all
+      for a prospect whose only season was later.
     """
-    return get_college_stats(espn_athlete_id, season=season)
+    return get_college_stats(espn_athlete_id, season=season or _latest_completed_college_season())
 
 
 def get_injury_history(espn_athlete_id: str) -> dict:
@@ -101,14 +116,19 @@ def get_injury_history(espn_athlete_id: str) -> dict:
 # ── Calibration anchors ───────────────────────────────────────────────────────
 
 TALENT_CALIBRATION = """
-Talent Grade calibration anchors (0-100) — evaluate production and athleticism ONLY, ignore landing spot:
-- 95-100 (A+): Historically elite college producer, multi-year dominant, elite measurables, top-5 pick talent
-- 85-94  (A/A-): Top-tier producer, dominant final season, clear Day-1 first-round talent
-- 75-84  (B+/B): Strong producer, above-average measurables, mid-first to early-second talent
-- 65-74  (B-/C+): Solid producer with clear tools, developmental upside, Day-2 talent
-- 50-64  (C/C-): Inconsistent production or limited sample, raw athleticism, Day-3 range
-- 35-49  (D+/D): Thin production, scheme-dependent stats, limited athleticism indicators
-- 0-34   (D-/F): Minimal production evidence, major athletic question marks
+Talent Grade calibration anchors (0-100) — evaluate college production and draft capital
+ONLY, ignore landing spot. You have no combine or measurement data: no height, weight,
+40 time, athleticism score or scheme profile is available to you, so do not grade on
+them or describe a player in those terms. Draft capital IS available via
+lookup_draft_prospect_info and stands in for how the league evaluated the traits you
+cannot see.
+- 95-100 (A+): Historically elite college producer, multi-year dominant, top-5 draft capital
+- 85-94  (A/A-): Top-tier producer, dominant final season, clear Day-1 draft capital
+- 75-84  (B+/B): Strong producer, mid-first to early-second draft capital
+- 65-74  (B-/C+): Solid producer with developmental upside, Day-2 draft capital
+- 50-64  (C/C-): Inconsistent production or limited sample, Day-3 draft capital
+- 35-49  (D+/D): Thin production, late Day-3 capital
+- 0-34   (D-/F): Minimal production evidence, undrafted or priority free agent
 
 Letter grade conversion:
 97-100→A+, 93-96→A, 90-92→A-, 87-89→B+, 83-86→B, 80-82→B-,
@@ -125,8 +145,9 @@ Risk Modifier — durability score 1-5 (5 = most durable) and injury chance %:
 SYSTEM_PROMPT = f"""You are the Production Agent for a dynasty fantasy football rookie draft tool.
 
 Your job: evaluate a rookie's TALENT only — completely independent of their landing spot or opportunity.
-Focus on: college production volume and efficiency, athletic profile (size/speed/draft grade),
-positional value, and durability (Risk Modifier).
+Focus on: college production volume and efficiency, draft capital (ESPN grade and round),
+positional value, and durability (Risk Modifier). Measurables are not available to you —
+see the calibration note below.
 
 {TALENT_CALIBRATION}
 
@@ -134,7 +155,7 @@ Tools available:
 - lookup_player_info: Basic profile + live injury/practice status from Sleeper
 - lookup_draft_prospect_info: ESPN draft grade, round/pick, ESPN athlete ID
 - get_career_college_stats: Career college production totals
-- get_recent_college_stats: Final season college stats (default 2024)
+- get_recent_college_stats: Most recent completed college season's stats
 - get_injury_history: Historical injury record from ESPN
 
 Steps:
