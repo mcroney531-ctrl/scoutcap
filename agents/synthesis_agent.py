@@ -61,7 +61,7 @@ def get_my_roster_needs() -> dict:
     headcount alone is not enough. The need score combines depth deficit with
     a quality deficit so that 11 worthless RBs scores the same as 2 RBs.
     """
-    from tools.fantasycalc import _load as _fc_load, value_grade as _value_grade
+    from tools.fantasycalc import get_player_value as _fc_value, value_grade as _value_grade
 
     username = os.getenv("SLEEPER_USERNAME")
     league_id = os.getenv("SLEEPER_LEAGUE_ID")
@@ -77,7 +77,6 @@ def get_my_roster_needs() -> dict:
         return {"error": "Could not find your roster in this league"}
 
     all_players = get_nfl_players()
-    fc = _fc_load()
     player_ids = my_roster.get("players") or []
 
     by_position: dict[str, list] = {"QB": [], "RB": [], "WR": [], "TE": []}
@@ -87,7 +86,12 @@ def get_my_roster_needs() -> dict:
         pos = p.get("position", "")
         if pos not in by_position:
             continue
-        fc_rec = fc.get(str(pid))
+        # _load() was dropped when FantasyCalc moved into dynasty_core during the
+        # umbrella consolidation; the two callers were not updated and have been
+        # raising ImportError since. get_player_value is the public accessor for
+        # the same condensed record (dynasty_value / dynasty_pos_rank) and is
+        # internally cached, so a per-player lookup costs nothing extra.
+        fc_rec = _fc_value(pid)
         dynasty_value  = fc_rec["dynasty_value"]   if fc_rec else 0
         dynasty_rank   = fc_rec.get("dynasty_pos_rank") if fc_rec else None
         grade = _value_grade(pos, dynasty_rank)    # reuse same tier thresholds

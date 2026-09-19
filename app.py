@@ -822,12 +822,13 @@ def render_prospect_table(all_rows, key_prefix):
 def _get_adp_ranking(rookies: list) -> list:
     """Rank prospects by estimated ADP. Sleeper search_rank primary; FC dynasty
     value fallback for players without a Sleeper rank."""
-    from tools.fantasycalc import _load as _fc_load
-    fc = _fc_load()
+    # _load() no longer exists — see the note in synthesis_agent. get_player_value
+    # returns the same condensed record and caches internally.
+    from tools.fantasycalc import get_player_value as _fc_value
     out = []
     for r in rookies:
         sr = r.get("search_rank") or 9999999
-        fc_rec = fc.get(str(r["player_id"]))
+        fc_rec = _fc_value(r["player_id"])
         if sr < 9999999:
             score = float(sr)
         elif fc_rec:
