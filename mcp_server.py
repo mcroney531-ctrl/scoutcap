@@ -5,7 +5,7 @@ Exposes the dynasty rookie scouting capabilities over the Model Context Protocol
 any MCP client (Claude Desktop, etc.) can use them. Two layers:
 
   • Granular data tools  — search prospects, opportunity, draft capital, veteran
-    competition quality, dynasty value, college production, injury history.
+    competition quality, dynasty value, college production.
   • High-level pipeline  — scout_rookie() runs the full 3-agent evaluation and
     returns the structured draft recommendation.
 
@@ -44,7 +44,6 @@ from agents.situation_agent import (
 from agents.production_agent import (
     lookup_draft_prospect_info,
     get_career_college_stats,
-    get_injury_history,
 )
 from agents.synthesis_agent import run_synthesis_agent
 
@@ -127,14 +126,14 @@ def college_production(name: str) -> dict:
     return get_career_college_stats(aid)
 
 
-@mcp.tool()
-def injury_history(name: str) -> dict:
-    """Historical injury records for a draft prospect (ESPN)."""
-    prospect = lookup_draft_prospect_info(name)
-    aid = prospect.get("espn_athlete_id")
-    if not aid:
-        return {"error": f"Could not resolve ESPN athlete ID for '{name}'", "prospect": prospect}
-    return get_injury_history(aid)
+# injury_history (removed) called agents.production_agent.get_injury_history,
+# which delegated to an ESPN endpoint confirmed to 404 for every real athlete
+# id tested, including currently injured players -- it was silently
+# converting "provider failed" into "no injury history found." Removed
+# alongside the same fix in production_agent.py rather than leaving this
+# MCP tool exposing the same false signal directly to any client. See
+# agents/production_agent.py's own comment at the same spot for the full
+# writeup.
 
 
 @mcp.tool()

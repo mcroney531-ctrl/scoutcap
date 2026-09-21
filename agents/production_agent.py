@@ -21,7 +21,7 @@ from google.adk.sessions import InMemorySessionService
 from google.genai import types as genai_types
 
 from tools.sleeper import search_players
-from tools.espn import search_draft_prospects, get_college_stats, get_nfl_injuries, get_espn_athlete_id
+from tools.espn import search_draft_prospects, get_college_stats, get_espn_athlete_id
 
 # ── ADK tool functions ────────────────────────────────────────────────────────
 
@@ -104,13 +104,15 @@ def get_recent_college_stats(espn_athlete_id: str, season: int | None = None) ->
     return get_college_stats(espn_athlete_id, season=season or _latest_completed_college_season())
 
 
-def get_injury_history(espn_athlete_id: str) -> dict:
-    """
-    Fetch historical injury records for an athlete from ESPN.
-    espn_athlete_id: the ESPN athlete ID.
-    Returns a list of past injuries with type, detail, and dates.
-    """
-    return get_nfl_injuries(espn_athlete_id)
+# get_injury_history (removed) called tools.espn.get_nfl_injuries, whose endpoint
+# 404s for every real ESPN athlete id tested -- confirmed live against currently
+# injured NFL players, not just this one. That 404 was silently converted into
+# "no injury history found," so this tool was telling the model every prospect
+# had a clean injury record regardless of the truth. It also named the wrong
+# domain: that endpoint is active-NFL status, not college durability history,
+# which isn't available from any verified source here. Current Sleeper
+# injury/practice status (lookup_player_info) is the only trustworthy health
+# signal and is what the Risk Modifier is scored from now.
 
 
 # ── Calibration anchors ───────────────────────────────────────────────────────
@@ -134,12 +136,19 @@ Letter grade conversion:
 97-100→A+, 93-96→A, 90-92→A-, 87-89→B+, 83-86→B, 80-82→B-,
 77-79→C+, 73-76→C, 70-72→C-, 67-69→D+, 63-66→D, 60-62→D-, <60→F
 
-Risk Modifier — durability score 1-5 (5 = most durable) and injury chance %:
-- 5 / <10%: No injury history, full practice participation, no known concerns
-- 4 / 10-20%: Minor injury history (e.g. single soft-tissue issue), fully healthy now
-- 3 / 20-35%: Moderate history (1-2 significant injuries) or current minor limitation
-- 2 / 35-50%: Recurrent injuries or a significant structural injury (ACL, shoulder labrum)
-- 1 / >50%: Multiple structural injuries or chronic durability concerns
+Risk Modifier — durability score 1-5 (5 = most durable) and injury chance %,
+scored ONLY from lookup_player_info's current Sleeper injury/practice status.
+Historical injury data is not available from any verified source here: do
+not infer "no injury history" from the absence of historical records, and
+do not invent past injuries. State current health status plainly.
+- 5 / <10%: Full practice participation, no current injury_status
+- 4 / 10-20%: Full practice participation, minor current designation (e.g.
+  "Questionable" with a non-structural note)
+- 3 / 20-35%: Limited practice participation, or a current injury_status
+  suggesting a moderate issue
+- 2 / 35-50%: Currently on a significant injury designation (e.g. "IR",
+  "PUP") or a structural injury noted in current status
+- 1 / >50%: Currently out with a serious/structural injury per current status
 """
 
 SYSTEM_PROMPT = f"""You are the Production Agent for a dynasty fantasy football rookie draft tool.
@@ -156,15 +165,18 @@ Tools available:
 - lookup_draft_prospect_info: ESPN draft grade, round/pick, ESPN athlete ID
 - get_career_college_stats: Career college production totals
 - get_recent_college_stats: Most recent completed college season's stats
-- get_injury_history: Historical injury record from ESPN
+
+There is no verified source of historical injury data for this tool to call.
+Do not treat the absence of history as a clean bill of health, and do not
+invent past injuries -- score the Risk Modifier from current Sleeper status
+only, per the calibration above.
 
 Steps:
 1. Call lookup_player_info for basic profile and live injury status
 2. Call lookup_draft_prospect_info for draft grade and ESPN athlete ID
 3. Call get_career_college_stats and get_recent_college_stats using the espn_athlete_id
-4. Call get_injury_history using the espn_athlete_id
-5. Compute Risk Modifier from injury history + current status
-6. Synthesize all into a Talent Grade
+4. Compute Risk Modifier from current Sleeper injury/practice status only
+5. Synthesize all into a Talent Grade
 
 Key stats to weight for skill positions:
 - RB: rushing yards/game, yards per carry, TD rate, receiving involvement, workload durability
@@ -193,7 +205,7 @@ Output format — always return a JSON object with these exact keys:
   "risk_modifier": {{
     "durability_score": 4,
     "injury_chance_pct": 15,
-    "injury_notes": "Brief description of any relevant injury history"
+    "injury_notes": "Brief description of current injury/practice status; historical injury data is not available"
   }},
   "talent_score": 88,
   "talent_grade": "B+",
@@ -215,7 +227,6 @@ def build_production_agent() -> LlmAgent:
             lookup_draft_prospect_info,
             get_career_college_stats,
             get_recent_college_stats,
-            get_injury_history,
         ],
     )
 
