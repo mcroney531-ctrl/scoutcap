@@ -45,9 +45,11 @@ def evaluate_situation(player_name: str) -> dict:
 
 def evaluate_production(player_name: str) -> dict:
     """
-    Call the Production Agent to evaluate talent and compute Risk Modifier for a rookie.
+    Call the Production Agent to evaluate talent and current health/availability for a rookie.
     Returns talent_score (0-100), talent_grade, key_stats, risk_modifier
-    (durability_score 1-5, injury_chance_pct), key_factors, concerns, summary.
+    (current_health_score 1-5 -- a current-status signal only, not a
+    historical durability assessment or a forecast of future injury
+    probability), key_factors, concerns, summary.
     """
     return _run_in_thread(run_production_agent(player_name))
 
@@ -224,7 +226,7 @@ def get_sentiment_signal(player_name: str) -> dict:
 def compute_composite_score(
     talent_score: int,
     opportunity_score: int,
-    durability_score: int,
+    current_health_score: int,
     sentiment_rank: int | None,
     rookie_class_size: int,
     position: str,
@@ -233,7 +235,11 @@ def compute_composite_score(
     Compute the weighted composite score and map it to a recommended draft pick.
 
     Weights: Talent 43% / Opportunity 38% / Risk 15% / Sentiment 4%
-    Risk is converted from durability_score (1-5) to 0-100 scale: (score-1)/4 * 100
+    The Risk component is fed by current_health_score (1-5, a current
+    health/availability signal from Sleeper status only -- not a historical
+    durability assessment or a forecast of future injury probability),
+    converted to 0-100: (score-1)/4 * 100. This is the same deterministic
+    conversion as before; only the semantics of the input changed.
     Sentiment is converted from rank to 0-100: absent = 50 (neutral), rank 1 = ~90, last = ~20
 
     position: 'QB', 'RB', 'WR', or 'TE'. A superflex positional-value multiplier is
@@ -245,7 +251,7 @@ def compute_composite_score(
     Returns base + position-adjusted composite, component scores, and
     recommended/floor/ceiling as round.pick.
     """
-    risk_score = ((durability_score - 1) / 4) * 100
+    risk_score = ((current_health_score - 1) / 4) * 100
 
     if sentiment_rank is None:
         sentiment_score = 50  # neutral — not in trending, but low volume period
@@ -356,8 +362,7 @@ Output format — return a JSON object with these exact keys:
   "opportunity_grade": "C+",
   "opportunity_score": 74,
   "risk_modifier": {
-    "durability_score": 5,
-    "injury_chance_pct": 8,
+    "current_health_score": 5,
     "injury_notes": "..."
   },
   "sentiment": {

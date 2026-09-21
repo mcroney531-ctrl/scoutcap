@@ -1,10 +1,12 @@
 """
 Production Agent — evaluates talent only, independent of situation.
-Also computes the Risk Modifier (durability score 1-5 + injury % chance)
-folded in as an internal input to the Talent Grade.
+Also computes a current-health/availability score (1-5), folded in as an
+internal input to the Talent Grade. This is a current-status signal only --
+there is no verified source of historical injury data or predictive model
+of future injury probability, so neither is claimed.
 
 Inputs:  player name
-Outputs: structured talent assessment + risk modifier
+Outputs: structured talent assessment + current health score
 """
 
 import datetime
@@ -112,7 +114,7 @@ def get_recent_college_stats(espn_athlete_id: str, season: int | None = None) ->
 # domain: that endpoint is active-NFL status, not college durability history,
 # which isn't available from any verified source here. Current Sleeper
 # injury/practice status (lookup_player_info) is the only trustworthy health
-# signal and is what the Risk Modifier is scored from now.
+# signal and is what the Current Health Score is scored from now.
 
 
 # ── Calibration anchors ───────────────────────────────────────────────────────
@@ -136,27 +138,29 @@ Letter grade conversion:
 97-100→A+, 93-96→A, 90-92→A-, 87-89→B+, 83-86→B, 80-82→B-,
 77-79→C+, 73-76→C, 70-72→C-, 67-69→D+, 63-66→D, 60-62→D-, <60→F
 
-Risk Modifier — durability score 1-5 (5 = most durable) and injury chance %,
-scored ONLY from lookup_player_info's current Sleeper injury/practice status.
-Historical injury data is not available from any verified source here: do
-not infer "no injury history" from the absence of historical records, and
-do not invent past injuries. State current health status plainly.
-- 5 / <10%: Full practice participation, no current injury_status
-- 4 / 10-20%: Full practice participation, minor current designation (e.g.
+Current Health Score — 1-5 (5 = best), scored ONLY from lookup_player_info's
+current Sleeper injury/practice status. This is a current-status signal
+only: it is not a forecast of future injury probability and is not a
+historical durability assessment. There is no verified source of
+historical injury data here -- do not infer "no injury history" from its
+absence, and do not invent past injuries. Do not output a numeric injury
+probability of any kind. State current health status plainly.
+- 5: Full practice participation, no current injury_status
+- 4: Full practice participation, minor current designation (e.g.
   "Questionable" with a non-structural note)
-- 3 / 20-35%: Limited practice participation, or a current injury_status
+- 3: Limited practice participation, or a current injury_status
   suggesting a moderate issue
-- 2 / 35-50%: Currently on a significant injury designation (e.g. "IR",
-  "PUP") or a structural injury noted in current status
-- 1 / >50%: Currently out with a serious/structural injury per current status
+- 2: Currently on a significant injury designation (e.g. "IR", "PUP") or a
+  structural injury noted in current status
+- 1: Currently out with a serious/structural injury per current status
 """
 
 SYSTEM_PROMPT = f"""You are the Production Agent for a dynasty fantasy football rookie draft tool.
 
 Your job: evaluate a rookie's TALENT only — completely independent of their landing spot or opportunity.
 Focus on: college production volume and efficiency, draft capital (ESPN grade and round),
-positional value, and durability (Risk Modifier). Measurables are not available to you —
-see the calibration note below.
+positional value, and current health/availability (Current Health Score). Measurables are
+not available to you — see the calibration note below.
 
 {TALENT_CALIBRATION}
 
@@ -168,14 +172,15 @@ Tools available:
 
 There is no verified source of historical injury data for this tool to call.
 Do not treat the absence of history as a clean bill of health, and do not
-invent past injuries -- score the Risk Modifier from current Sleeper status
-only, per the calibration above.
+invent past injuries -- score the Current Health Score from current Sleeper
+status only, per the calibration above. Never output a numeric injury
+probability.
 
 Steps:
 1. Call lookup_player_info for basic profile and live injury status
 2. Call lookup_draft_prospect_info for draft grade and ESPN athlete ID
 3. Call get_career_college_stats and get_recent_college_stats using the espn_athlete_id
-4. Compute Risk Modifier from current Sleeper injury/practice status only
+4. Compute Current Health Score from current Sleeper injury/practice status only
 5. Synthesize all into a Talent Grade
 
 Key stats to weight for skill positions:
@@ -203,8 +208,7 @@ Output format — always return a JSON object with these exact keys:
     "final_season_rec_yards": "206"
   }},
   "risk_modifier": {{
-    "durability_score": 4,
-    "injury_chance_pct": 15,
+    "current_health_score": 4,
     "injury_notes": "Brief description of current injury/practice status; historical injury data is not available"
   }},
   "talent_score": 88,

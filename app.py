@@ -597,12 +597,11 @@ def show_report_overlay(player: dict):
             "",
             "Graded by the **Production Agent**, which evaluates talent independent "
             "of landing spot: career college production, athletic profile, and "
-            "historical injury record.",
+            "current health/availability status.",
         ]
         if _risk:
             lines.append(
-                f"\n**Risk:** durability {_risk.get('durability_score','—')}/5 · "
-                f"injury chance {_risk.get('injury_chance_pct','—')}%"
+                f"\n**Current health:** {_risk.get('current_health_score','—')}/5"
             )
         if _up:
             lines.append("\n**What helps:**")
@@ -683,8 +682,7 @@ def show_report_overlay(player: dict):
 
     risk = analysis.get("risk_modifier", {})
     st.markdown(
-        f"**Risk Modifier:** Durability {risk.get('durability_score','—')}/5 "
-        f"· Injury chance {risk.get('injury_chance_pct','—')}%"
+        f"**Risk Modifier:** Current health {risk.get('current_health_score','—')}/5"
     )
     if risk.get("injury_notes"):
         st.caption(risk["injury_notes"])
@@ -1890,9 +1888,8 @@ else:
 
         # Risk modifier
         risk = analysis.get("risk_modifier", {})
-        dur = risk.get("durability_score", "—")
-        inj_pct = risk.get("injury_chance_pct", "—")
-        st.markdown(f"**Risk Modifier:** Durability {dur}/5 · Injury chance {inj_pct}%")
+        health = risk.get("current_health_score", "—")
+        st.markdown(f"**Risk Modifier:** Current health {health}/5")
         if risk.get("injury_notes"):
             st.caption(risk["injury_notes"])
 
