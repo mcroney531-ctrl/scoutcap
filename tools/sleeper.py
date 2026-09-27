@@ -1,50 +1,35 @@
-import httpx
+"""Scout Sleeper facade over shared dynasty_core.sleeper.
 
-BASE = "https://api.sleeper.app/v1"
+Provider/network behavior lives in dynasty_core. This module keeps Scout's
+existing public names as aliases so callers don't churn, plus Scout-specific
+player-search policy (search_players).
+"""
 
+from dynasty_core.sleeper import (
+    get_user,
+    get_leagues,
+    get_league_rosters as get_rosters,
+    get_league_users as get_users_in_league,
+    get_all_players as get_nfl_players,
+    get_player,
+    get_trending,
+)
 
-def get_user(username: str) -> dict:
-    r = httpx.get(f"{BASE}/user/{username}")
-    r.raise_for_status()
-    return r.json()
-
-
-def get_leagues(user_id: str, season: str = "2025") -> list:
-    r = httpx.get(f"{BASE}/user/{user_id}/leagues/nfl/{season}")
-    r.raise_for_status()
-    return r.json()
-
-
-def get_rosters(league_id: str) -> list:
-    r = httpx.get(f"{BASE}/league/{league_id}/rosters")
-    r.raise_for_status()
-    return r.json()
-
-
-def get_users_in_league(league_id: str) -> list:
-    r = httpx.get(f"{BASE}/league/{league_id}/users")
-    r.raise_for_status()
-    return r.json()
-
-
-def get_nfl_players() -> dict:
-    """Full player map — large (~5MB). Cache locally after first fetch."""
-    r = httpx.get(f"{BASE}/players/nfl", timeout=30)
-    r.raise_for_status()
-    return r.json()
-
-
-def get_player(player_id: str) -> dict | None:
-    """Look up a single player by Sleeper player_id."""
-    r = httpx.get(f"{BASE}/players/nfl/{player_id}")
-    if r.status_code == 404:
-        return None
-    r.raise_for_status()
-    return r.json()
+__all__ = [
+    "get_user",
+    "get_leagues",
+    "get_rosters",
+    "get_users_in_league",
+    "get_nfl_players",
+    "get_player",
+    "get_trending",
+    "search_players",
+]
 
 
 def search_players(name: str) -> list[dict]:
-    """Search all NFL players by name (full player map — cache externally)."""
+    """Scout-specific name search over the shared cached player catalog:
+    case-insensitive substring match on full_name, QB/RB/WR/TE only."""
     all_players = get_nfl_players()
     name_lower = name.lower()
     return [
@@ -53,18 +38,3 @@ def search_players(name: str) -> list[dict]:
         if name_lower in (p.get("full_name") or "").lower()
         and p.get("position") in ("QB", "RB", "WR", "TE")
     ]
-
-
-def get_trending(type: str = "add", sport: str = "nfl", limit: int = 25) -> list:
-    r = httpx.get(f"{BASE}/players/{sport}/trending/{type}", params={"limit": limit})
-    r.raise_for_status()
-    return r.json()
-
-
-def get_traded_picks(league_id: str) -> list:
-    """All traded draft picks for the league.
-    Each entry: {season, round, roster_id (original owner),
-    previous_owner_id, owner_id (current holder)}."""
-    r = httpx.get(f"{BASE}/league/{league_id}/traded_picks")
-    r.raise_for_status()
-    return r.json()
