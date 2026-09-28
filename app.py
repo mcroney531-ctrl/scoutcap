@@ -855,15 +855,13 @@ def _load_pick_arsenal(season: str = "2026") -> dict:
     """Pull the user's actual 2026 pick assets from Sleeper traded_picks.
     Returns a list of picks with round, source ('own' or 'acquired'),
     from_team name, and estimated_overall (None until slot is confirmed)."""
-    import os, httpx
-    _BASE = "https://api.sleeper.app/v1"
     league_id = os.getenv("SLEEPER_LEAGUE_ID")
     username  = os.getenv("SLEEPER_USERNAME")
 
     user    = get_user(username)
     rosters = get_rosters(league_id)
-    users   = httpx.get(f"{_BASE}/league/{league_id}/users", timeout=15).json()
-    traded  = httpx.get(f"{_BASE}/league/{league_id}/traded_picks", timeout=15).json()
+    users   = get_users_in_league(league_id)
+    traded  = get_traded_picks(league_id)
 
     my_roster = next((r for r in rosters if r.get("owner_id") == user["user_id"]), None)
     if not my_roster:
@@ -1311,7 +1309,9 @@ def render_mock_draft(rookies: list):
 
 # ─────────────────────────────────────────────────────────────────────────────
 
-from tools.sleeper import get_nfl_players, get_user, get_rosters
+from tools.sleeper import (
+    get_nfl_players, get_user, get_rosters, get_users_in_league, get_traded_picks,
+)
 from agents.synthesis_agent import run_synthesis_agent
 
 # ── Session state defaults ────────────────────────────────────────────────────

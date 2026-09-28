@@ -8,8 +8,10 @@ Deliberate changes to unused surface, each pinned here so it can't regress:
     season="2025" default was stale and had no caller).
   - get_player re-exports the shared cached-map lookup, replacing the old raw
     GET /players/nfl/{id} request.
-  - get_traded_picks is removed from the facade (zero callers); shared core
-    still owns dynasty_core.sleeper.get_traded_picks.
+  - get_traded_picks was removed from the facade in Batch 6 (zero callers
+    then). Stage 2C-4 re-exports it because app.py's pick-arsenal helper now
+    uses it, replacing that helper's direct HTTP. Same reasoning, new caller
+    fact: the facade exposes a shared primitive once Scout has a consumer.
 
 The active-consumer tests route a fake at the network layer
 (dynasty_core.sleeper.httpx.get) and run real consumers end to end:
@@ -111,9 +113,8 @@ class FacadeOwnsNoNetworkTest(unittest.TestCase):
         self.assertFalse(hasattr(facade, "httpx"))
         self.assertFalse(hasattr(facade, "BASE"))
 
-    def test_traded_picks_removed_from_facade_but_kept_in_core(self):
-        self.assertFalse(hasattr(facade, "get_traded_picks"))
-        self.assertTrue(callable(core.get_traded_picks))
+    def test_traded_picks_is_the_shared_primitive_now_that_it_has_a_caller(self):
+        self.assertIs(facade.get_traded_picks, core.get_traded_picks)
 
 
 class FacadeContractTest(_SharedCacheReset):

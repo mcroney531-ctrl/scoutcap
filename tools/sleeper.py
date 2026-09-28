@@ -13,6 +13,7 @@ from dynasty_core.sleeper import (
     get_all_players as get_nfl_players,
     get_player,
     get_trending,
+    get_traded_picks,
 )
 
 __all__ = [
@@ -23,6 +24,7 @@ __all__ = [
     "get_nfl_players",
     "get_player",
     "get_trending",
+    "get_traded_picks",
     "search_players",
 ]
 
