@@ -8,6 +8,12 @@ the offline suite because the installed set varies by environment.
 
 Direct pins only, not a transitive lockfile (same discipline as
 Ddreportcards' Phase 4B).
+
+Stage 2C-6.5: the checker now also understands one future form, the
+immutable dynasty-core Git pin; test_dependency_contract.py proves every
+other VCS/URL form is rejected. This file stays about the *actual* file:
+today it holds exactly the seven ==-pins and no Git dependency. 2C-7
+updates it deliberately to seven version pins plus one dynasty-core pin.
 """
 import pathlib
 import re
@@ -60,12 +66,10 @@ class RequirementsAreFullyPinnedTest(unittest.TestCase):
         self.assertIn("google-adk[extensions]==", text)
         self.assertIn("mcp[cli]==", text)
 
-    def test_no_ranges_or_vcs_dependencies(self):
-        for line in _requirement_lines():
-            with self.subTest(line):
-                for forbidden in (">=", "<=", "~=", "!=", "<", ">", " @ ", "git+", "://"):
-                    self.assertNotIn(forbidden, line)
-                self.assertEqual(line.count("=="), 1)
+    def test_all_seven_are_version_pins_and_no_git_dependency_yet(self):
+        specs = check_versions.parse_requirements()
+        self.assertEqual(len(specs), 7)
+        self.assertTrue(all(spec["kind"] == "version" for spec in specs.values()))
 
 
 if __name__ == "__main__":
