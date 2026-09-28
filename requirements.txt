@@ -5,3 +5,4 @@ python-dotenv==1.2.3
 streamlit==1.64.0
 pandas==2.3.3
 mcp[cli]==1.28.1
+dynasty-core @ git+https://github.com/mcroney531-ctrl/dynasty-core.git@cef3c3d2b7120825110235eb2c30b4f8dd9a0247

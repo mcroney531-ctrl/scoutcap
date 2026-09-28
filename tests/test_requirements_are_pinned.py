@@ -9,11 +9,11 @@ the offline suite because the installed set varies by environment.
 Direct pins only, not a transitive lockfile (same discipline as
 Ddreportcards' Phase 4B).
 
-Stage 2C-6.5: the checker now also understands one future form, the
-immutable dynasty-core Git pin; test_dependency_contract.py proves every
-other VCS/URL form is rejected. This file stays about the *actual* file:
-today it holds exactly the seven ==-pins and no Git dependency. 2C-7
-updates it deliberately to seven version pins plus one dynasty-core pin.
+Stage 2C-7: the actual file now holds the seven ==-pins plus exactly one
+immutable dynasty-core Git pin (the canonical shared package, replacing the
+local dynasty_core/ copy). test_dependency_contract.py proves every other
+VCS/URL form is rejected. parse_requirements() covers the whole contract;
+parse_pins() intentionally returns only the ordinary version pins.
 """
 import pathlib
 import re
@@ -22,6 +22,9 @@ import unittest
 import scripts.check_dependency_versions as check_versions
 
 REQUIREMENTS_PATH = pathlib.Path(__file__).resolve().parent.parent / "requirements.txt"
+
+# Canonical dynasty-core commit pinned by this app (Stage 2C-7).
+CORE_SHA = "cef3c3d2b7120825110235eb2c30b4f8dd9a0247"
 
 EXPECTED_DIRECT_DEPENDENCIES = {
     "google-adk",
@@ -46,11 +49,11 @@ def _normalize(name: str) -> str:
 
 
 class RequirementsAreFullyPinnedTest(unittest.TestCase):
-    def test_every_non_comment_line_parses_as_an_exact_pin(self):
-        pins = check_versions.parse_pins()
+    def test_every_non_comment_line_parses_as_an_allowed_form(self):
+        specs = check_versions.parse_requirements()
         self.assertEqual(
-            len(pins), len(_requirement_lines()),
-            "every non-comment line in requirements.txt must be an exact ==-pinned dependency",
+            len(specs), len(_requirement_lines()),
+            "every non-comment line must be an exact ==-pin or the immutable dynasty-core Git pin",
         )
 
     def test_exactly_the_seven_direct_dependencies_are_present(self):
@@ -66,10 +69,14 @@ class RequirementsAreFullyPinnedTest(unittest.TestCase):
         self.assertIn("google-adk[extensions]==", text)
         self.assertIn("mcp[cli]==", text)
 
-    def test_all_seven_are_version_pins_and_no_git_dependency_yet(self):
+    def test_seven_version_pins_plus_one_immutable_dynasty_core_pin(self):
         specs = check_versions.parse_requirements()
-        self.assertEqual(len(specs), 7)
-        self.assertTrue(all(spec["kind"] == "version" for spec in specs.values()))
+        self.assertEqual(len(specs), 8)
+        self.assertEqual(sum(spec["kind"] == "version" for spec in specs.values()), 7)
+        git = {name: spec for name, spec in specs.items() if spec["kind"] == "git"}
+        self.assertEqual(list(git), ["dynasty-core"])
+        self.assertEqual(git["dynasty-core"]["repo"], "https://github.com/mcroney531-ctrl/dynasty-core")
+        self.assertEqual(git["dynasty-core"]["value"], CORE_SHA)
 
 
 if __name__ == "__main__":
