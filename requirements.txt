@@ -1,7 +1,7 @@
-google-adk[extensions]
-anthropic
-httpx
-python-dotenv
-streamlit
-pandas
-mcp[cli]
+google-adk[extensions]==2.9.2
+anthropic==1.6.0
+httpx==0.28.1
+python-dotenv==1.2.3
+streamlit==1.64.0
+pandas==2.3.3
+mcp[cli]==1.28.1

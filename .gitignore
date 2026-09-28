@@ -6,3 +6,5 @@ __pycache__/
 *.egg-info/
 .DS_Store
 check_*.py
+# Tracked dependency diagnostic (Stage 2C-5), exempt from the scratch-script rule above.
+!scripts/check_dependency_versions.py
