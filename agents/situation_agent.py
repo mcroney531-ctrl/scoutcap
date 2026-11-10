@@ -19,6 +19,7 @@ from google.genai import types as genai_types
 
 from tools.sleeper import search_players, get_nfl_players, get_trending
 from tools.espn import search_draft_prospects
+from config.league import DRAFT_CLASS_YEAR
 from tools.fantasycalc import get_player_value, value_grade
 
 # ── ADK tool functions ────────────────────────────────────────────────────────
@@ -35,7 +36,7 @@ def lookup_player_opportunity(player_name: str) -> dict:
     if not matches:
         return {"error": f"No player found matching '{player_name}'"}
 
-    # Prefer year-0 rookies (2026 class), then most relevant by search_rank
+    # Prefer year-0 rookies (the configured rookie class), then most relevant by search_rank
     rookies = [p for p in matches if p.get("years_exp") == 0]
     pool = rookies if rookies else matches
     pool.sort(key=lambda p: p.get("search_rank") or 9999999)
@@ -59,9 +60,9 @@ def lookup_draft_capital(player_name: str) -> dict:
     Look up a rookie's NFL draft capital from ESPN:
     - draft_round, draft_pick, draft_overall
     - espn_grade, espn_overall_rank, espn_position_rank
-    Returns best name match from the 2026 draft class.
+    Returns best name match from the configured draft class.
     """
-    results = search_draft_prospects(player_name, season=2026)
+    results = search_draft_prospects(player_name, season=DRAFT_CLASS_YEAR)
     if not results:
         return {"error": f"No ESPN draft prospect found matching '{player_name}'"}
     return results[0]

@@ -24,6 +24,7 @@ from google.genai import types as genai_types
 
 from tools.sleeper import search_players
 from tools.espn import search_draft_prospects, get_college_stats, get_espn_athlete_id
+from config.league import DRAFT_CLASS_YEAR
 
 # ── ADK tool functions ────────────────────────────────────────────────────────
 
@@ -63,7 +64,7 @@ def lookup_draft_prospect_info(player_name: str) -> dict:
     ESPN overall rank, ESPN position rank, weight, height, position.
     Also returns the ESPN athlete ID needed for college stats and injury lookups.
     """
-    results = search_draft_prospects(player_name, season=2026)
+    results = search_draft_prospects(player_name, season=DRAFT_CLASS_YEAR)
     if not results:
         return {"error": f"No ESPN draft prospect found matching '{player_name}'"}
     prospect = results[0]

@@ -22,7 +22,12 @@ A single LLM call with a big prompt could attempt this, but separating these int
 
 ## Architecture
 
-**League format:** 4 rounds, 12 picks per round (48 total picks). Recommendations are output as exact draft slots using round.pick notation (e.g. "4.04" = round 4, pick 4).
+**League format:** currently 4 rounds, 12 picks per round (48 total picks). Recommendations are output as exact draft slots using round.pick notation (e.g. "4.04" = round 4, pick 4).
+
+**League configuration lives in `config/league.py`**, the one source for both values below. The Mock Draft board, pick labels, slot pickers, completion check and the Synthesis prompt all read it; nothing else re-encodes them.
+
+- `LEAGUE` holds the geometry: `rounds` (4), `picks_per_round` (12) and `total_picks` (48). An import-time check enforces `total_picks == rounds * picks_per_round`. Loading your picks from Sleeper refuses, with a visible message, a league whose roster count or traded-pick rounds disagree with it. The Mock Draft order is snake: forward in odd rounds, reverse in even rounds.
+- `DRAFT_CLASS_YEAR` (2026) is the rookie class Scout evaluates. It drives ESPN draft-prospect lookups, Sleeper pick loading, the sentiment note, the MCP prospect search and the UI labels. **DRAFT_CLASS_YEAR is intentionally manual. Do not advance it from the calendar alone.** Sleeper's rookie board (`years_exp == 0`) keeps showing the current class well into the following season, so roll the year forward deliberately, once the next class is actually on the board. The "most recent completed college season" used for college stats is a separate clock and stays calendar-based.
 
 **[Insert architecture diagram here]**
 
@@ -67,7 +72,7 @@ that the ADK agents use. Two layers are exposed:
 
 | Tool | Returns |
 |---|---|
-| `search_prospects(name)` | 2026 draft prospects (ESPN) — draft capital, scout grade, ranks |
+| `search_prospects(name)` | Draft prospects for the configured class (`DRAFT_CLASS_YEAR`, ESPN) — draft capital, scout grade, ranks |
 | `player_opportunity(name)` | Sleeper depth chart, team, status |
 | `draft_capital(name)` | ESPN draft round/pick, scout grade, ranks |
 | `veteran_competition(team, position)` | FantasyCalc-graded quality of the veterans ahead (soft room vs. entrenched starter) |

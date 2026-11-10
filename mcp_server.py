@@ -35,6 +35,7 @@ from mcp.server.fastmcp import FastMCP
 # Reuse the existing tool layer — no logic duplicated.
 from tools.sleeper import search_players, get_trending, get_nfl_players
 from tools.espn import search_draft_prospects
+from config.league import DRAFT_CLASS_YEAR
 from tools.fantasycalc import get_player_value, value_grade
 from agents.situation_agent import (
     lookup_player_opportunity,
@@ -65,9 +66,9 @@ def _best_match(name: str) -> dict | None:
 
 @mcp.tool()
 def search_prospects(name: str) -> list:
-    """Search the 2026 NFL draft class (ESPN) by name. Returns matching prospects
+    """Search the configured NFL draft class (ESPN) by name. Returns matching prospects
     with draft capital, ESPN scout grade, and ESPN ranks."""
-    return search_draft_prospects(name, season=2026)
+    return search_draft_prospects(name, season=DRAFT_CLASS_YEAR)
 
 
 @mcp.tool()

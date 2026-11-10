@@ -2,6 +2,19 @@
 Roster positions verified against Sleeper API 2026-07-04.
 """
 
+# The rookie class Scout is built around: the Sleeper board (years_exp == 0),
+# the ESPN draft lookups, the Mock Draft's pick season and every "<year> rookie
+# class" label read this one value.
+#
+# Rollover is deliberately manual. Change DRAFT_CLASS_YEAR only when the whole
+# Scout experience is intentionally moving to the next rookie class and its
+# Sleeper and ESPN data sources support that class consistently. Never derive it
+# from the calendar: in late 2026 the Sleeper rookie board is still the 2026
+# class, so a date-based switch to 2027 would split the app across two classes.
+# (The "most recent completed college season" used for college stats is a
+# different, deliberately calendar-based clock; see agents/production_agent.py.)
+DRAFT_CLASS_YEAR = 2026
+
 LEAGUE = {
     "rounds": 4,
     "picks_per_round": 12,
@@ -20,6 +33,21 @@ LEAGUE = {
         "IR": 4,
     },
 }
+
+
+
+def validate_league_shape(league: dict) -> None:
+    """The Mock Draft board, pick labels and score -> pick mapping all assume
+    total_picks == rounds * picks_per_round. Fail loudly if that stops being true."""
+    rounds, per_round, total = league["rounds"], league["picks_per_round"], league["total_picks"]
+    if rounds < 1 or per_round < 1 or total != rounds * per_round:
+        raise ValueError(
+            f"Invalid league shape: total_picks={total} must equal rounds={rounds} x "
+            f"picks_per_round={per_round} (both at least 1)."
+        )
+
+
+validate_league_shape(LEAGUE)
 
 # Composite weighting — locked, uniform across all positions
 WEIGHTS = {
