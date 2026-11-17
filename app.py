@@ -320,6 +320,13 @@ if _light:
           border-radius: 10px !important;
           box-shadow: inset 3px 3px 7px #cdd1e0, inset -3px -3px 7px #ffffff !important;
         }
+        /* The multiselect's inner search input must stay transparent — otherwise
+           the neumorphic input rule paints it as a white blob over the tags. */
+        .stApp [data-baseweb="select"] input {
+          background: transparent !important;
+          box-shadow: none !important;
+          border-radius: 0 !important;
+        }
 
         /* ── Metric cards — outset / raised ── */
         div[data-testid="stMetric"] {
@@ -352,6 +359,13 @@ if _light:
         div[class*="st-key-whybtn_"] button {
           border: 2px solid #212F52 !important;
           box-shadow: 4px 6px 16px rgba(17,28,56,0.35) !important;
+        }
+        /* The "❓ Why?" popover panel itself — same navy stroke + shadow */
+        div[data-testid="stPopoverBody"],
+        [data-baseweb="popover"] [data-testid="stPopoverBody"] {
+          border: 2px solid #212F52 !important;
+          box-shadow: 4px 6px 16px rgba(17,28,56,0.35) !important;
+          border-radius: 10px !important;
         }
 
         /* ── Toggle widget ── */
