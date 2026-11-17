@@ -26,6 +26,10 @@ import dynasty_core.sleeper as core
 import tools.fantasycalc as fantasycalc
 
 APP_PATH = str(pathlib.Path(__file__).resolve().parent.parent / "app.py")
+# Generous on purpose: the first run in a fresh Python 3.14 environment
+# compiles the app's whole import graph (google-adk, litellm, pandas...) and
+# was observed to exceed 240s. This bounds startup only; no assertion changes.
+APPTEST_TIMEOUT_SECONDS = 900
 BASE = core.BASE_URL
 YEAR = league.DRAFT_CLASS_YEAR
 TEAMS = league.LEAGUE["picks_per_round"]
@@ -89,7 +93,7 @@ class MockDraftUiTest(unittest.TestCase):
         http = mock.patch.object(core.httpx, "get", side_effect=_fake_sleeper(**sleeper))
         http.start()
         self.addCleanup(http.stop)
-        at = AppTest.from_file(APP_PATH, default_timeout=240)
+        at = AppTest.from_file(APP_PATH, default_timeout=APPTEST_TIMEOUT_SECONDS)
         at.session_state["view"] = "mock"
         at.run()
         self.assertFalse(at.exception, at.exception)

@@ -1,62 +1,73 @@
 #!/usr/bin/env python3
 """
-Reports the installed versions of scoutcap's direct runtime
-dependencies against the exact pins in requirements.txt, so a future
-deployment drifting from the known-good baseline (Stage 2C-5) is easy to
-spot -- a `pip install` that silently picked up something different, a
-base image change, or a manual dependency bump that forgot to update
-requirements.txt.
+Scout's dependency contract: pyproject.toml declares it, uv.lock resolves it
+exactly, and the installed environment must match both.
 
-Two, and only two, requirement forms are accepted (Stage 2C-6.5, ported
-from Ddreportcards' Stage 2C-6 checker at 18be0ab):
+Three layers, all checked by main():
 
-  name[optional-extras]==exact-version        ordinary direct dependency
-  dynasty-core @ git+https://github.com/mcroney531-ctrl/dynasty-core.git@<40 lowercase hex>
+1. pyproject.toml (validated with stdlib tomllib, no extra dependency).
+   [project].dependencies may hold only two forms:
 
-The Git form is a single, deliberate exception for the shared package: one
-distribution, one repository, git+https, full commit SHA. Branches, tags,
-short SHAs, other repositories, other transports, embedded credentials, and
-VCS dependencies for any other package are all rejected, and dynasty-core
-is not accepted as an ordinary ==-pin either, since it isn't published to
-any package index. Any non-comment line that isn't one of the two forms is
-an error, never silently skipped.
+     name[optional-extras]==exact-version     ordinary direct dependency
+     dynasty-core                             bare name, sourced below
 
-For the Git dependency the installed *version* proves nothing; the source
-commit is the immutability contract. The installed package's PEP 610
-direct_url.json must say vcs == "git", commit_id == the pinned SHA, and
-url == the expected repository.
+   and [tool.uv.sources] may hold only one entry:
 
-Deliberately NOT part of the offline test suite: it depends on which
-packages happen to be installed in whatever environment runs it, and that
-varies between a bare dev sandbox (which may not have every dependency
-installed at all) and a real Scout environment -- the offline
-suite has to pass in either, so a hard version assertion doesn't belong
-there. Run this after any dependency-affecting deploy, or locally after
-`pip install -r requirements.txt`, to confirm what's pinned is what's
-actually there.
+     dynasty-core = { git = "https://github.com/mcroney531-ctrl/dynasty-core.git",
+                      rev = "<40 lowercase hex>" }
 
-Usage:
-  python scripts/check_dependency_versions.py
+   Branches, tags, short SHAs, other repositories, other transports,
+   embedded credentials, path/url/index/editable sources, sources for any
+   other package, extra indexes and dependency overrides are all rejected.
+   dynasty-core is never accepted as an index pin or a PEP 508 direct
+   reference, and never without its Git source (it isn't published to any
+   package index, so an unsourced name could resolve to someone else's
+   upload). Anything else is an error, never silently skipped.
+
+2. uv.lock (offline). Each ordinary pin is locked at exactly its version from
+   PyPI, dynasty-core is locked from the canonical repository at the pinned
+   commit, and every other locked package comes from PyPI: no other Git,
+   URL, path or directory source can enter the graph unreviewed. Whether the
+   lock is *current* with pyproject.toml is `uv lock --check`, which needs
+   uv and runs in the release proof (README "Setup").
+
+3. The installed environment. Ordinary versions must equal the pins. For
+   dynasty-core the version proves nothing; the installed package's PEP 610
+   direct_url.json must say vcs == "git", commit_id == the pinned SHA and
+   url == the canonical repository.
+
+Deliberately NOT part of the offline test suite as a whole run: layer 3
+depends on what's installed wherever it runs. Run it after `uv sync --locked`:
+
+  uv run --locked python scripts/check_dependency_versions.py
 """
 import importlib.metadata
 import json
 import pathlib
 import re
 import sys
+import tomllib
 
-REQUIREMENTS_PATH = pathlib.Path(__file__).resolve().parent.parent / "requirements.txt"
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+PYPROJECT_PATH = ROOT / "pyproject.toml"
+LOCK_PATH = ROOT / "uv.lock"
 
 DYNASTY_CORE_DIST = "dynasty-core"
 DYNASTY_CORE_REPO_URL = "https://github.com/mcroney531-ctrl/dynasty-core"
+DYNASTY_CORE_GIT_URL = DYNASTY_CORE_REPO_URL + ".git"
+PYPI_REGISTRY = "https://pypi.org/simple"
 
 _PIN_PATTERN = re.compile(r"^([A-Za-z0-9_.-]+)(\[[^\]]+\])?==([A-Za-z0-9_.\-+]+)$")
-_DYNASTY_CORE_GIT_PATTERN = re.compile(
-    r"^dynasty-core @ git\+https://github\.com/mcroney531-ctrl/dynasty-core\.git@([0-9a-f]{40})$"
-)
+_SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
+# [tool.uv] may say only these; anything else (indexes, find-links,
+# overrides, constraints, dev-dependencies...) could change the graph
+# outside the reviewed contract.
+_ALLOWED_TOOL_UV_KEYS = {"package", "sources"}
+_FORBIDDEN_TOP_LEVEL = ("dependency-groups",)
 
 
-class RequirementsError(ValueError):
-    """requirements.txt contains a line that isn't one of the allowed forms."""
+class DependencyContractError(ValueError):
+    """pyproject.toml declares something outside the allowed dependency forms."""
 
 
 def normalize_name(name: str) -> str:
@@ -64,73 +75,181 @@ def normalize_name(name: str) -> str:
     return re.sub(r"[-_.]+", "-", name).lower()
 
 
-def parse_requirement_line(line: str) -> tuple[str, dict]:
-    """Parse one non-comment requirement line into (name, spec).
+def _first_name(entry: str) -> str:
+    return normalize_name(re.split(r"[\s@\[=<>~!;(]", entry.strip(), maxsplit=1)[0])
+
+
+def parse_dependency(entry: str) -> tuple[str, dict]:
+    """Parse one [project].dependencies entry into (name, spec).
 
     spec is {"kind": "version", "value": "<version>", "extras": "[...]" or ""}
-    or {"kind": "git", "value": "<40-hex sha>", "repo": DYNASTY_CORE_REPO_URL}.
-    Raises RequirementsError for anything else.
-    """
-    git = _DYNASTY_CORE_GIT_PATTERN.match(line)
-    if git:
-        return DYNASTY_CORE_DIST, {"kind": "git", "value": git.group(1), "repo": DYNASTY_CORE_REPO_URL}
-
-    pin = _PIN_PATTERN.match(line)
-    if pin:
+    or {"kind": "sourced"} for the bare dynasty-core name, which only becomes
+    a Git spec once its [tool.uv.sources] entry is validated."""
+    if not isinstance(entry, str):
+        raise DependencyContractError(f"{entry!r}: dependency entries must be strings")
+    if entry == DYNASTY_CORE_DIST:
+        return DYNASTY_CORE_DIST, {"kind": "sourced"}
+    pin = _PIN_PATTERN.match(entry)
+    if pin and normalize_name(pin.group(1)) != DYNASTY_CORE_DIST:
         name, extras, version = pin.groups()
-        if normalize_name(name) == DYNASTY_CORE_DIST:
-            raise RequirementsError(
-                f"{line!r}: dynasty-core may only be pinned as "
-                f"'dynasty-core @ git+{DYNASTY_CORE_REPO_URL}.git@<40-char lowercase commit sha>'"
-            )
         return name, {"kind": "version", "value": version, "extras": extras or ""}
-
-    if normalize_name(re.split(r"[\s@\[=<>~!;]", line, maxsplit=1)[0]) == DYNASTY_CORE_DIST:
-        raise RequirementsError(
-            f"{line!r}: dynasty-core must be exactly "
-            f"'dynasty-core @ git+{DYNASTY_CORE_REPO_URL}.git@<40-char lowercase commit sha>' "
-            "(no branches, tags, short SHAs, other repos, other transports, or credentials)"
+    if _first_name(entry) == DYNASTY_CORE_DIST:
+        raise DependencyContractError(
+            f"{entry!r}: list dynasty-core as exactly 'dynasty-core' and pin it in [tool.uv.sources] "
+            f"(git = {DYNASTY_CORE_GIT_URL!r}, rev = <40-char lowercase commit sha>)"
         )
-    raise RequirementsError(
-        f"{line!r}: not an allowed requirement form -- expected 'name[extras]==exact-version' "
-        "(VCS/URL dependencies are only allowed for dynasty-core in its immutable form)"
+    raise DependencyContractError(
+        f"{entry!r}: not an allowed dependency form -- expected 'name[extras]==exact-version' "
+        "(no ranges, markers, URLs or direct references)"
     )
 
 
-def parse_requirements_text(text: str) -> dict[str, dict]:
-    """Parse every non-comment line. Raises RequirementsError listing every
-    invalid line and every duplicate (normalized) name; never skips a line."""
+def parse_dynasty_core_source(sources) -> str:
+    """Validate [tool.uv.sources]; return the pinned dynasty-core commit."""
+    if not isinstance(sources, dict):
+        raise DependencyContractError("[tool.uv.sources] must be a table")
+    extra = sorted(k for k in sources if k != DYNASTY_CORE_DIST)
+    if extra:
+        raise DependencyContractError(f"[tool.uv.sources] may only configure dynasty-core, not {extra}")
+    source = sources.get(DYNASTY_CORE_DIST)
+    if not isinstance(source, dict):
+        raise DependencyContractError(
+            "dynasty-core needs exactly one [tool.uv.sources] table entry (no lists of sources)"
+        )
+    if set(source) != {"git", "rev"}:
+        raise DependencyContractError(
+            f"dynasty-core source must have exactly 'git' and 'rev' (got {sorted(source)}): "
+            "no branch, tag, path, url, index, editable or subdirectory"
+        )
+    if source["git"] != DYNASTY_CORE_GIT_URL:
+        raise DependencyContractError(
+            f"dynasty-core git source {source['git']!r} must be exactly {DYNASTY_CORE_GIT_URL!r}"
+        )
+    if not isinstance(source["rev"], str) or not _SHA_PATTERN.match(source["rev"]):
+        raise DependencyContractError(
+            f"dynasty-core rev {source['rev']!r} must be a full 40-char lowercase commit sha"
+        )
+    return source["rev"]
+
+
+def parse_project_data(data: dict) -> dict[str, dict]:
+    """Validate parsed pyproject data. Collects every problem; never skips."""
+    errors: list[str] = []
+    project = data.get("project") or {}
+    tool_uv = (data.get("tool") or {}).get("uv") or {}
+
+    for key in _FORBIDDEN_TOP_LEVEL:
+        if key in data:
+            errors.append(f"[{key}] is not part of Scout's dependency contract")
+    if "optional-dependencies" in project:
+        errors.append("[project.optional-dependencies] is not part of Scout's dependency contract")
+    unknown_uv = sorted(set(tool_uv) - _ALLOWED_TOOL_UV_KEYS)
+    if unknown_uv:
+        errors.append(f"[tool.uv] may only set {sorted(_ALLOWED_TOOL_UV_KEYS)}, not {unknown_uv}")
+    if tool_uv.get("package") is not False:
+        errors.append("[tool.uv] package must be false (Scout is an application, not a package)")
+
     parsed: dict[str, dict] = {}
     seen: dict[str, str] = {}
-    errors: list[str] = []
-    for raw in text.splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
+    entries = project.get("dependencies")
+    if not isinstance(entries, list):
+        errors.append("[project].dependencies must be a list")
+        entries = []
+    for entry in entries:
         try:
-            name, spec = parse_requirement_line(line)
-        except RequirementsError as exc:
+            name, spec = parse_dependency(entry)
+        except DependencyContractError as exc:
             errors.append(str(exc))
             continue
         key = normalize_name(name)
         if key in seen:
-            errors.append(f"{line!r}: duplicate dependency (already declared as {seen[key]!r})")
+            errors.append(f"{entry!r}: duplicate dependency (already declared as {seen[key]!r})")
             continue
-        seen[key] = line
+        seen[key] = entry
         parsed[name] = spec
+
+    sources = tool_uv.get("sources", {})
+    if DYNASTY_CORE_DIST in parsed:
+        try:
+            sha = parse_dynasty_core_source(sources)
+            parsed[DYNASTY_CORE_DIST] = {"kind": "git", "value": sha, "repo": DYNASTY_CORE_REPO_URL}
+        except DependencyContractError as exc:
+            errors.append(str(exc))
+    elif sources:
+        errors.append("[tool.uv.sources] configures a package that isn't a declared dependency")
+
     if errors:
-        raise RequirementsError("invalid requirements.txt:\n  " + "\n  ".join(errors))
+        raise DependencyContractError("invalid pyproject.toml:\n  " + "\n  ".join(errors))
     return parsed
 
 
-def parse_requirements(path: pathlib.Path = REQUIREMENTS_PATH) -> dict[str, dict]:
-    return parse_requirements_text(path.read_text())
+def parse_project_text(text: str) -> dict[str, dict]:
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as exc:
+        raise DependencyContractError(f"pyproject.toml is not valid TOML: {exc}") from exc
+    return parse_project_data(data)
 
 
-def parse_pins(path: pathlib.Path = REQUIREMENTS_PATH) -> dict[str, str]:
-    """Compatibility helper: {name: exact version} for the ordinary ==-pins.
-    Raises (rather than skipping) if any line is invalid."""
-    return {name: spec["value"] for name, spec in parse_requirements(path).items() if spec["kind"] == "version"}
+def parse_project(path: pathlib.Path = PYPROJECT_PATH) -> dict[str, dict]:
+    return parse_project_text(path.read_text(encoding="utf-8"))
+
+
+def parse_pins(path: pathlib.Path = PYPROJECT_PATH) -> dict[str, str]:
+    """{name: exact version} for the ordinary pins. Raises on any invalid entry."""
+    return {name: spec["value"] for name, spec in parse_project(path).items() if spec["kind"] == "version"}
+
+
+def check_lock_data(lock: dict, specs: dict[str, dict]) -> list[str]:
+    """Offline checks of a parsed uv.lock against the validated contract.
+    Returns a list of problems (empty means the lock is consistent)."""
+    problems: list[str] = []
+    packages = lock.get("package")
+    if not isinstance(packages, list) or not packages:
+        return ["uv.lock has no [[package]] entries"]
+
+    locked: dict[str, list[dict]] = {}
+    for pkg in packages:
+        locked.setdefault(normalize_name(str(pkg.get("name", ""))), []).append(pkg)
+
+    for name, spec in specs.items():
+        entries = locked.get(normalize_name(name), [])
+        if len(entries) != 1:
+            problems.append(f"{name}: expected exactly one locked entry, found {len(entries)}")
+            continue
+        pkg = entries[0]
+        source = pkg.get("source") or {}
+        if spec["kind"] == "version":
+            if pkg.get("version") != spec["value"]:
+                problems.append(f"{name}: pinned {spec['value']}, locked {pkg.get('version')}")
+            if source != {"registry": PYPI_REGISTRY}:
+                problems.append(f"{name}: locked from {source!r}, expected PyPI")
+        else:
+            expected = f"{DYNASTY_CORE_GIT_URL}?rev={spec['value']}#{spec['value']}"
+            if source != {"git": expected}:
+                problems.append(f"{name}: locked from {source!r}, expected git {expected!r}")
+
+    for pkg in packages:
+        name = normalize_name(str(pkg.get("name", "")))
+        source = pkg.get("source") or {}
+        if name == DYNASTY_CORE_DIST:
+            continue
+        if source == {"registry": PYPI_REGISTRY}:
+            continue
+        if source == {"virtual": "."}:      # the Scout project itself (package = false)
+            continue
+        problems.append(f"{name}: locked from non-PyPI source {source!r}")
+    return problems
+
+
+def check_lock(specs: dict[str, dict], path: pathlib.Path = LOCK_PATH) -> list[str]:
+    if not path.is_file():
+        return [f"{path.name} is missing"]
+    try:
+        lock = tomllib.loads(path.read_text(encoding="utf-8"))
+    except tomllib.TOMLDecodeError as exc:
+        return [f"{path.name} is not valid TOML: {exc}"]
+    return check_lock_data(lock, specs)
 
 
 def _normalize_repo_url(url: str) -> str:
@@ -181,12 +300,19 @@ def check_git_install(dist_name: str, expected_sha: str, expected_repo: str = DY
 
 def main() -> int:
     try:
-        specs = parse_requirements()
-    except RequirementsError as exc:
+        specs = parse_project()
+    except DependencyContractError as exc:
         print(str(exc), file=sys.stderr)
         return 2
     if not specs:
-        print(f"No pinned dependencies found in {REQUIREMENTS_PATH}", file=sys.stderr)
+        print(f"No dependencies declared in {PYPROJECT_PATH}", file=sys.stderr)
+        return 2
+
+    lock_problems = check_lock(specs)
+    for problem in lock_problems:
+        print(f"[LOCK]      {problem}")
+    if lock_problems:
+        print(f"\nuv.lock does not match the dependency contract ({len(lock_problems)} problem(s)).")
         return 2
 
     problems = 0
@@ -202,7 +328,7 @@ def main() -> int:
     if problems:
         print(f"{problems} of {len(specs)} pinned dependencies do not match what's installed.")
         return 1
-    print(f"All {len(specs)} pinned dependencies match what's installed.")
+    print(f"uv.lock is consistent with pyproject.toml; all {len(specs)} pinned dependencies match what's installed.")
     return 0
 
 

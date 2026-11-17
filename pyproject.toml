@@ -1,0 +1,31 @@
+# Scout's direct dependency contract. Human-owned: change it deliberately,
+# regenerate uv.lock with uv (never by hand), run the full regression, and
+# commit pyproject.toml + uv.lock together. See README "Setup".
+#
+# scripts/check_dependency_versions.py enforces the shape: exact ==-pins for
+# the seven ordinary dependencies, and dynasty-core only from the canonical
+# Git repository at an immutable 40-character commit.
+
+[project]
+name = "scoutcap"
+version = "0.0.0"
+description = "Rookie Scout: multi-agent dynasty rookie draft evaluation"
+requires-python = ">=3.14,<3.15"
+dependencies = [
+    "google-adk[extensions]==2.9.2",
+    "anthropic==1.6.0",
+    "httpx==0.28.1",
+    "python-dotenv==1.2.3",
+    "streamlit==1.64.0",
+    "pandas==2.3.3",
+    "mcp[cli]==1.28.1",
+    "dynasty-core",
+]
+
+[tool.uv]
+# An application, not a distributable package: uv installs its dependencies
+# into .venv and never builds or installs Scout itself.
+package = false
+
+[tool.uv.sources]
+dynasty-core = { git = "https://github.com/mcroney531-ctrl/dynasty-core.git", rev = "cef3c3d2b7120825110235eb2c30b4f8dd9a0247" }

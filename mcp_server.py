@@ -9,15 +9,17 @@ any MCP client (Claude Desktop, etc.) can use them. Two layers:
   • High-level pipeline  — scout_rookie() runs the full 3-agent evaluation and
     returns the structured draft recommendation.
 
-Run (stdio transport):
-    python mcp_server.py
+Run (stdio transport), in the locked project environment:
+    uv run --locked python mcp_server.py
 
-Claude Desktop config (claude_desktop_config.json):
+Claude Desktop config (claude_desktop_config.json); replace the directory
+with your scoutcap checkout:
     {
       "mcpServers": {
         "rookie-scout": {
-          "command": "D:\\\\venvs\\\\kaggleproj312\\\\Scripts\\\\python.exe",
-          "args": ["C:\\\\Users\\\\myfit\\\\OneDrive\\\\Documents\\\\KaggleProj\\\\mcp_server.py"]
+          "command": "uv",
+          "args": ["run", "--locked", "--directory", "C:\\\\path\\\\to\\\\scoutcap",
+                   "python", "mcp_server.py"]
         }
       }
     }
