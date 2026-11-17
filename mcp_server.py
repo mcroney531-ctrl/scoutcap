@@ -98,7 +98,7 @@ def veteran_competition(team: str, position: str) -> dict:
 @mcp.tool()
 def dynasty_value(name: str) -> dict:
     """Dynasty + redraft value for any player (rookie or veteran) from FantasyCalc,
-    with a positional grade. 12-team superflex PPR settings."""
+    with a positional grade. 12-team superflex half-PPR settings."""
     p = _best_match(name)
     if not p:
         return {"error": f"No player found matching '{name}'"}
