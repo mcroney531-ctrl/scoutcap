@@ -65,10 +65,17 @@ def get_my_roster_needs() -> dict:
     """
     from tools.fantasycalc import get_player_value as _fc_value, value_grade as _value_grade
 
-    username = os.getenv("SLEEPER_USERNAME")
-    league_id = os.getenv("SLEEPER_LEAGUE_ID")
+    # Same deployment identity, and the same checks, as the Mock Draft pick
+    # loader in app.py: fail with a message the agent can report rather than
+    # calling Sleeper with None or indexing into a missing user.
+    username = (os.getenv("SLEEPER_USERNAME") or "").strip()
+    league_id = (os.getenv("SLEEPER_LEAGUE_ID") or "").strip()
+    if not username or not league_id:
+        return {"error": "SLEEPER_USERNAME and SLEEPER_LEAGUE_ID must both be set to read your roster."}
 
     user = get_user(username)
+    if not isinstance(user, dict) or not user.get("user_id"):
+        return {"error": "Couldn't find that Sleeper user. Check SLEEPER_USERNAME."}
     rosters = get_rosters(league_id)
     users = get_users_in_league(league_id)
 
