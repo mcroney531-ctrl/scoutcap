@@ -19,6 +19,7 @@ from google.genai import types as genai_types
 
 from tools.sleeper import search_players, get_nfl_players, get_trending
 from tools.espn import search_draft_prospects
+from config.league import DRAFT_CLASS_YEAR
 from tools.fantasycalc import get_player_value, value_grade
 
 # ── ADK tool functions ────────────────────────────────────────────────────────
@@ -35,7 +36,7 @@ def lookup_player_opportunity(player_name: str) -> dict:
     if not matches:
         return {"error": f"No player found matching '{player_name}'"}
 
-    # Prefer year-0 rookies (2026 class), then most relevant by search_rank
+    # Prefer year-0 rookies (the configured rookie class), then most relevant by search_rank
     rookies = [p for p in matches if p.get("years_exp") == 0]
     pool = rookies if rookies else matches
     pool.sort(key=lambda p: p.get("search_rank") or 9999999)
@@ -59,9 +60,9 @@ def lookup_draft_capital(player_name: str) -> dict:
     Look up a rookie's NFL draft capital from ESPN:
     - draft_round, draft_pick, draft_overall
     - espn_grade, espn_overall_rank, espn_position_rank
-    Returns best name match from the 2026 draft class.
+    Returns best name match from the configured draft class.
     """
-    results = search_draft_prospects(player_name, season=2026)
+    results = search_draft_prospects(player_name, season=DRAFT_CLASS_YEAR)
     if not results:
         return {"error": f"No ESPN draft prospect found matching '{player_name}'"}
     return results[0]
@@ -185,13 +186,15 @@ def get_trending_sentiment(limit: int = 50) -> dict:
 # ── Calibration anchors (baked into system prompt) ────────────────────────────
 
 OPPORTUNITY_CALIBRATION = """
-Opportunity Grade calibration anchors (0-100):
-- 95-100 (A+): Day-1 starter on a contending team with no competition, elite scheme fit, multi-year window
-- 85-94  (A/A-): Clear starter, minimal competition, good scheme, good team
-- 75-84  (B+/B): Likely starter but meaningful competition OR suboptimal scheme/team
+Opportunity Grade calibration anchors (0-100) — grade on depth chart position and the
+quality of the competition ahead. You have NO source for offensive scheme, pass rate,
+coaching staff or team quality, so do not grade on them or refer to them.
+- 95-100 (A+): Day-1 starter with no meaningful competition ahead
+- 85-94  (A/A-): Clear starter, minimal competition
+- 75-84  (B+/B): Likely starter but meaningful competition ahead
 - 65-74  (B-/C+): Legitimate role but sharing touches or unclear depth chart
-- 50-64  (C/C-): Backup with a path, or starter on a very run-heavy/pass-light team
-- 35-49  (D+/D): Deep backup or blocked by established veteran
+- 50-64  (C/C-): Backup with a path to touches
+- 35-49  (D+/D): Deep backup or blocked by an established veteran
 - 0-34   (D-/F): No clear path to meaningful touches this season
 
 Letter grade conversion:
@@ -203,7 +206,9 @@ SYSTEM_PROMPT = f"""You are the Situation Agent for a dynasty fantasy football r
 
 Your job: evaluate a rookie's OPPORTUNITY only — completely independent of how talented they are.
 Do not factor in college production, athleticism, or draft pedigree in your grade.
-Focus entirely on: landing spot quality, depth chart position, scheme fit, team context, and competition for snaps.
+Focus entirely on: depth chart position and the quality of the competition for snaps.
+Scheme fit and team context are NOT available to you — there is no tool that returns a
+team's scheme, pass rate, coaching staff or outlook, so do not grade on them.
 
 {OPPORTUNITY_CALIBRATION}
 

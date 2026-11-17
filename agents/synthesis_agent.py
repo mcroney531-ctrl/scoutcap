@@ -20,7 +20,7 @@ from tools.sleeper import (
     get_user, get_rosters, get_users_in_league,
     get_nfl_players, get_trending, search_players,
 )
-from config.league import LEAGUE, WEIGHTS, POSITION_VALUE, PICK_CURVE
+from config.league import LEAGUE, WEIGHTS, POSITION_VALUE, PICK_CURVE, DRAFT_CLASS_YEAR
 from agents.situation_agent import run_situation_agent
 from agents.production_agent import run_production_agent
 
@@ -45,9 +45,11 @@ def evaluate_situation(player_name: str) -> dict:
 
 def evaluate_production(player_name: str) -> dict:
     """
-    Call the Production Agent to evaluate talent and compute Risk Modifier for a rookie.
+    Call the Production Agent to evaluate talent and current health/availability for a rookie.
     Returns talent_score (0-100), talent_grade, key_stats, risk_modifier
-    (durability_score 1-5, injury_chance_pct), key_factors, concerns, summary.
+    (current_health_score 1-5 -- a current-status signal only, not a
+    historical durability assessment or a forecast of future injury
+    probability), key_factors, concerns, summary.
     """
     return _run_in_thread(run_production_agent(player_name))
 
@@ -61,7 +63,7 @@ def get_my_roster_needs() -> dict:
     headcount alone is not enough. The need score combines depth deficit with
     a quality deficit so that 11 worthless RBs scores the same as 2 RBs.
     """
-    from tools.fantasycalc import _load as _fc_load, value_grade as _value_grade
+    from tools.fantasycalc import get_player_value as _fc_value, value_grade as _value_grade
 
     username = os.getenv("SLEEPER_USERNAME")
     league_id = os.getenv("SLEEPER_LEAGUE_ID")
@@ -77,7 +79,6 @@ def get_my_roster_needs() -> dict:
         return {"error": "Could not find your roster in this league"}
 
     all_players = get_nfl_players()
-    fc = _fc_load()
     player_ids = my_roster.get("players") or []
 
     by_position: dict[str, list] = {"QB": [], "RB": [], "WR": [], "TE": []}
@@ -87,7 +88,12 @@ def get_my_roster_needs() -> dict:
         pos = p.get("position", "")
         if pos not in by_position:
             continue
-        fc_rec = fc.get(str(pid))
+        # _load() was dropped when FantasyCalc moved into dynasty_core during the
+        # umbrella consolidation; the two callers were not updated and have been
+        # raising ImportError since. get_player_value is the public accessor for
+        # the same condensed record (dynasty_value / dynasty_pos_rank) and is
+        # internally cached, so a per-player lookup costs nothing extra.
+        fc_rec = _fc_value(pid)
         dynasty_value  = fc_rec["dynasty_value"]   if fc_rec else 0
         dynasty_rank   = fc_rec.get("dynasty_pos_rank") if fc_rec else None
         grade = _value_grade(pos, dynasty_rank)    # reuse same tier thresholds
@@ -161,13 +167,13 @@ def get_my_roster_needs() -> dict:
 def get_sentiment_signal(player_name: str) -> dict:
     """
     Compute relative crowd sentiment for a player from Sleeper trending adds.
-    Returns rank within 2026 rookie class currently in trending data (1 = most trending).
+    Returns rank within the configured rookie class currently in trending data (1 = most trending).
     Overall activity level is noted — low offseason volume means sentiment is color, not signal.
     """
     trending = get_trending("add", limit=200)
     all_players = get_nfl_players()
 
-    # Build ranked list of 2026 rookies (years_exp=0) in trending data
+    # Build ranked list of rookies (years_exp=0, the configured class) in trending data
     rookie_trending = []
     total_count = sum(t.get("count", 0) for t in trending)
 
@@ -209,7 +215,7 @@ def get_sentiment_signal(player_name: str) -> dict:
         "activity_level": activity_level,
         "top_5_trending_rookies": rookie_trending[:5],
         "note": (
-            "Sentiment is relative rank within the 2026 rookie class in trending data. "
+            f"Sentiment is relative rank within the {DRAFT_CLASS_YEAR} rookie class in trending data. "
             f"Overall platform activity is {activity_level} — "
             + ("treat as directional color only, not a decisive factor." if activity_level == "low"
                else "moderate signal weight is appropriate.")
@@ -220,7 +226,7 @@ def get_sentiment_signal(player_name: str) -> dict:
 def compute_composite_score(
     talent_score: int,
     opportunity_score: int,
-    durability_score: int,
+    current_health_score: int,
     sentiment_rank: int | None,
     rookie_class_size: int,
     position: str,
@@ -229,19 +235,23 @@ def compute_composite_score(
     Compute the weighted composite score and map it to a recommended draft pick.
 
     Weights: Talent 43% / Opportunity 38% / Risk 15% / Sentiment 4%
-    Risk is converted from durability_score (1-5) to 0-100 scale: (score-1)/4 * 100
+    The Risk component is fed by current_health_score (1-5, a current
+    health/availability signal from Sleeper status only -- not a historical
+    durability assessment or a forecast of future injury probability),
+    converted to 0-100: (score-1)/4 * 100. This is the same deterministic
+    conversion as before; only the semantics of the input changed.
     Sentiment is converted from rank to 0-100: absent = 50 (neutral), rank 1 = ~90, last = ~20
 
     position: 'QB', 'RB', 'WR', or 'TE'. A superflex positional-value multiplier is
     applied to the base composite (QBs get a premium, TEs a slight discount) before
     the pick mapping. The score → pick conversion is a non-linear logistic curve:
     elite composites cluster in round 1 a few picks apart, while weak composites
-    flatten into rounds 3-4.
+    flatten into the final rounds.
 
     Returns base + position-adjusted composite, component scores, and
     recommended/floor/ceiling as round.pick.
     """
-    risk_score = ((durability_score - 1) / 4) * 100
+    risk_score = ((current_health_score - 1) / 4) * 100
 
     if sentiment_rank is None:
         sentiment_score = 50  # neutral — not in trending, but low volume period
@@ -260,14 +270,14 @@ def compute_composite_score(
     pos_mult = POSITION_VALUE.get((position or "").upper(), 1.0)
     adj_composite = max(0.0, min(100.0, base_composite * pos_mult))
 
-    total_picks = LEAGUE["total_picks"]        # 48
-    picks_per_round = LEAGUE["picks_per_round"]  # 12
+    total_picks = LEAGUE["total_picks"]
+    picks_per_round = LEAGUE["picks_per_round"]
     mid = PICK_CURVE["midpoint"]
     steep = PICK_CURVE["steepness"]
 
     def score_to_pick(score: float) -> str:
         # Logistic: high score → pick 1 (steeply separated at the top),
-        # low score → pick 48 (flattened). f in [0,1], 0 = best.
+        # low score → the last pick (flattened). f in [0,1], 0 = best.
         f = 1.0 / (1.0 + math.exp(steep * (score - mid)))
         pick_num = int(max(1, min(total_picks, round(1 + f * (total_picks - 1)))))
         round_num = (pick_num - 1) // picks_per_round + 1
@@ -304,7 +314,7 @@ def compute_composite_score(
 
 # ── Calibration / system prompt ───────────────────────────────────────────────
 
-SYSTEM_PROMPT = """You are the Synthesis Agent for a dynasty fantasy football rookie draft tool.
+_SYSTEM_PROMPT_TEMPLATE = """You are the Synthesis Agent for a dynasty fantasy football rookie draft tool.
 
 You orchestrate the full evaluation pipeline for a rookie prospect:
 1. Call evaluate_situation → get Opportunity Grade
@@ -315,14 +325,14 @@ You orchestrate the full evaluation pipeline for a rookie prospect:
    position (QB/RB/WR/TE) — the position drives the superflex value premium
 6. Synthesize everything into the final structured recommendation
 
-League format: 4 rounds, 12 picks/round (48 total picks). THIS IS A SUPERFLEX LEAGUE —
+League format: <<ROUNDS>> rounds, <<PICKS_PER_ROUND>> picks/round (<<TOTAL_PICKS>> total picks). THIS IS A SUPERFLEX LEAGUE —
 QBs can start in the SF slot, so they carry a real value premium that compute_composite_score
 applies automatically via the position multiplier. Reflect this in your narrative for QBs.
 
-Picks are expressed in exact round.pick notation: 1.01 through 4.12.
+Picks are expressed in exact round.pick notation: 1.01 through <<LAST_PICK_LABEL>>.
 The recommended pick is a relative positioning signal (like ADP), not a literal instruction.
 The score → pick mapping is non-linear: elite prospects compress into round 1 (a few picks
-apart), while weaker grades flatten into rounds 3-4 — so small composite gaps at the top
+apart), while weaker grades flatten into <<LATE_ROUNDS>> — so small composite gaps at the top
 matter far more than the same gap in the late rounds.
 
 Roster need context: CRITICAL — need is QUALITY-WEIGHTED via FantasyCalc dynasty grades,
@@ -342,10 +352,6 @@ put the number of grade D/F bodies in "replaceable_count", and write a one-line 
 Weave the headline insight into your narrative (e.g. "buried on paper, but the bodies ahead
 are all replaceable — a soft room").
 
-After reaching your own conclusion, briefly compare it to KeepTradeCut dynasty value if you
-have any general knowledge of where this player sits in dynasty consensus — surface agreement
-or explain specific divergence. Do NOT fold KTC into the composite score.
-
 Output format — return a JSON object with these exact keys:
 {
   "player": "Full Name",
@@ -356,8 +362,7 @@ Output format — return a JSON object with these exact keys:
   "opportunity_grade": "C+",
   "opportunity_score": 74,
   "risk_modifier": {
-    "durability_score": 5,
-    "injury_chance_pct": 8,
+    "current_health_score": 5,
     "injury_notes": "..."
   },
   "sentiment": {
@@ -381,11 +386,32 @@ Output format — return a JSON object with these exact keys:
   "roster_need_note": "One sentence referencing actual roster quality (starter_quality_score, top players, real_contributors) — e.g. 'Your RB room has 11 players but only 1 grade-B contributor; this is a real need'.",
   "headline": "Talent: A- / Opportunity: C+ → Floor: 2.08, Ceiling: 1.03 → Recommended: 1.09",
   "narrative": "3-4 sentence synthesis of why this player grades where they do, what the tension is between talent and opportunity, and what scenario would push them toward ceiling vs. floor.",
-  "ktc_comparison": "One sentence comparing to KTC dynasty consensus or noting lack of data.",
   "key_risks": ["bullet risks"],
   "key_upside": ["bullet upside drivers"]
 }
 """
+
+
+def _league_prompt_values(league: dict) -> dict:
+    """League geometry as it appears in the Synthesis prompt, from config."""
+    rounds, per_round = league["rounds"], league["picks_per_round"]
+    return {
+        "<<ROUNDS>>": str(rounds),
+        "<<PICKS_PER_ROUND>>": str(per_round),
+        "<<TOTAL_PICKS>>": str(league["total_picks"]),
+        "<<LAST_PICK_LABEL>>": f"{rounds}.{per_round:02d}",
+        "<<LATE_ROUNDS>>": f"rounds {rounds - 1}-{rounds}" if rounds >= 2 else "the final round",
+    }
+
+
+def build_system_prompt(league: dict = LEAGUE) -> str:
+    prompt = _SYSTEM_PROMPT_TEMPLATE
+    for token, value in _league_prompt_values(league).items():
+        prompt = prompt.replace(token, value)
+    return prompt
+
+
+SYSTEM_PROMPT = build_system_prompt()
 
 # ── Agent + runner ────────────────────────────────────────────────────────────
 

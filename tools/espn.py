@@ -1,11 +1,15 @@
 import httpx
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from config.league import DRAFT_CLASS_YEAR
+
 NFL_BASE = "https://sports.core.api.espn.com/v2/sports/football/leagues/nfl"
 CFB_BASE = "https://sports.core.api.espn.com/v2/sports/football/leagues/college-football"
 
-# Module-level cache: built once per process, reused across all lookups
-_draft_roster_cache: dict | None = None
+# Module-level cache, one entry per draft season: each season's roster is built
+# once per process. (It used to be a single slot, so whichever season loaded
+# first was returned for every later season.)
+_draft_roster_cache: dict[int, dict] = {}
 
 
 def _get(url: str, **params) -> dict:
@@ -50,11 +54,11 @@ def _resolve_draft_athlete(url: str) -> dict | None:
         return None
 
 
-def _build_draft_roster(season: int = 2026) -> dict:
+def _build_draft_roster(season: int = DRAFT_CLASS_YEAR) -> dict:
     """
     Fetch all draft athletes for a season in parallel and return a
     name-keyed index: {lower_name: prospect_dict}.
-    Called once per process; result cached in module-level variable.
+    Called once per season per process; _get_draft_roster caches the result.
     """
     # Collect all athlete refs
     refs = []
@@ -78,14 +82,14 @@ def _build_draft_roster(season: int = 2026) -> dict:
     return index
 
 
-def _get_draft_roster(season: int = 2026) -> dict:
-    global _draft_roster_cache
-    if _draft_roster_cache is None:
-        _draft_roster_cache = _build_draft_roster(season)
-    return _draft_roster_cache
+def _get_draft_roster(season: int = DRAFT_CLASS_YEAR) -> dict:
+    season = int(season)
+    if season not in _draft_roster_cache:
+        _draft_roster_cache[season] = _build_draft_roster(season)
+    return _draft_roster_cache[season]
 
 
-def search_draft_prospects(name: str, season: int = 2026) -> list[dict]:
+def search_draft_prospects(name: str, season: int = DRAFT_CLASS_YEAR) -> list[dict]:
     """
     Search draft prospects by name. Fast: uses cached parallel-built roster index.
     Returns list of matches sorted by closeness of name match.
@@ -100,7 +104,7 @@ def search_draft_prospects(name: str, season: int = 2026) -> list[dict]:
     return matches
 
 
-def get_espn_athlete_id(draft_athlete_id: str, season: int = 2026) -> str | None:
+def get_espn_athlete_id(draft_athlete_id: str, season: int = DRAFT_CLASS_YEAR) -> str | None:
     """
     Resolve a draft athlete ID to the base ESPN athlete (college-football) ID.
     First checks the roster cache for speed, falls back to live fetch.
@@ -127,7 +131,7 @@ def get_espn_athlete_id(draft_athlete_id: str, season: int = 2026) -> str | None
     return ra.json().get("id") if ra.status_code == 200 else None
 
 
-def get_draft_prospect(espn_athlete_id: str, season: int = 2026) -> dict:
+def get_draft_prospect(espn_athlete_id: str, season: int = DRAFT_CLASS_YEAR) -> dict:
     """Return draft capital + basic info for a prospect by draft athlete ID."""
     roster = _get_draft_roster(season)
     for prospect in roster.values():

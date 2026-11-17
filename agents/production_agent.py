@@ -1,12 +1,15 @@
 """
 Production Agent — evaluates talent only, independent of situation.
-Also computes the Risk Modifier (durability score 1-5 + injury % chance)
-folded in as an internal input to the Talent Grade.
+Also computes a current-health/availability score (1-5), folded in as an
+internal input to the Talent Grade. This is a current-status signal only --
+there is no verified source of historical injury data or predictive model
+of future injury probability, so neither is claimed.
 
 Inputs:  player name
-Outputs: structured talent assessment + risk modifier
+Outputs: structured talent assessment + current health score
 """
 
+import datetime
 import os, sys, json, re
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
@@ -20,7 +23,8 @@ from google.adk.sessions import InMemorySessionService
 from google.genai import types as genai_types
 
 from tools.sleeper import search_players
-from tools.espn import search_draft_prospects, get_college_stats, get_nfl_injuries, get_espn_athlete_id
+from tools.espn import search_draft_prospects, get_college_stats, get_espn_athlete_id
+from config.league import DRAFT_CLASS_YEAR
 
 # ── ADK tool functions ────────────────────────────────────────────────────────
 
@@ -60,7 +64,7 @@ def lookup_draft_prospect_info(player_name: str) -> dict:
     ESPN overall rank, ESPN position rank, weight, height, position.
     Also returns the ESPN athlete ID needed for college stats and injury lookups.
     """
-    results = search_draft_prospects(player_name, season=2026)
+    results = search_draft_prospects(player_name, season=DRAFT_CLASS_YEAR)
     if not results:
         return {"error": f"No ESPN draft prospect found matching '{player_name}'"}
     prospect = results[0]
@@ -80,53 +84,84 @@ def get_career_college_stats(espn_athlete_id: str) -> dict:
     return get_college_stats(espn_athlete_id, season=None)
 
 
-def get_recent_college_stats(espn_athlete_id: str, season: int = 2024) -> dict:
+def _latest_completed_college_season() -> int:
+    """The most recent college season with a full stat line on file.
+
+    A college season is named for the year it kicks off in and finishes with
+    bowl games the following January, so at any point in year Y the last
+    complete season is Y-1: during the autumn the current one is still being
+    played, and before August it is the one that ended that January.
+    """
+    return datetime.date.today().year - 1
+
+
+def get_recent_college_stats(espn_athlete_id: str, season: int | None = None) -> dict:
     """
     Fetch single-season college production stats for an athlete.
     espn_athlete_id: the ESPN athlete ID (not the draft ID).
-    season: e.g. 2024 for their final college season.
+    season: defaults to the most recent completed college season. It used to
+      default to a hardcoded 2024, which silently returned two-year-old
+      production for anyone scouted after that — and returned nothing at all
+      for a prospect whose only season was later.
     """
-    return get_college_stats(espn_athlete_id, season=season)
+    return get_college_stats(espn_athlete_id, season=season or _latest_completed_college_season())
 
 
-def get_injury_history(espn_athlete_id: str) -> dict:
-    """
-    Fetch historical injury records for an athlete from ESPN.
-    espn_athlete_id: the ESPN athlete ID.
-    Returns a list of past injuries with type, detail, and dates.
-    """
-    return get_nfl_injuries(espn_athlete_id)
+# get_injury_history (removed) called tools.espn.get_nfl_injuries, whose endpoint
+# 404s for every real ESPN athlete id tested -- confirmed live against currently
+# injured NFL players, not just this one. That 404 was silently converted into
+# "no injury history found," so this tool was telling the model every prospect
+# had a clean injury record regardless of the truth. It also named the wrong
+# domain: that endpoint is active-NFL status, not college durability history,
+# which isn't available from any verified source here. Current Sleeper
+# injury/practice status (lookup_player_info) is the only trustworthy health
+# signal and is what the Current Health Score is scored from now.
 
 
 # ── Calibration anchors ───────────────────────────────────────────────────────
 
 TALENT_CALIBRATION = """
-Talent Grade calibration anchors (0-100) — evaluate production and athleticism ONLY, ignore landing spot:
-- 95-100 (A+): Historically elite college producer, multi-year dominant, elite measurables, top-5 pick talent
-- 85-94  (A/A-): Top-tier producer, dominant final season, clear Day-1 first-round talent
-- 75-84  (B+/B): Strong producer, above-average measurables, mid-first to early-second talent
-- 65-74  (B-/C+): Solid producer with clear tools, developmental upside, Day-2 talent
-- 50-64  (C/C-): Inconsistent production or limited sample, raw athleticism, Day-3 range
-- 35-49  (D+/D): Thin production, scheme-dependent stats, limited athleticism indicators
-- 0-34   (D-/F): Minimal production evidence, major athletic question marks
+Talent Grade calibration anchors (0-100) — evaluate college production and draft capital
+ONLY, ignore landing spot. You have no combine or measurement data: no height, weight,
+40 time, athleticism score or scheme profile is available to you, so do not grade on
+them or describe a player in those terms. Draft capital IS available via
+lookup_draft_prospect_info and stands in for how the league evaluated the traits you
+cannot see.
+- 95-100 (A+): Historically elite college producer, multi-year dominant, top-5 draft capital
+- 85-94  (A/A-): Top-tier producer, dominant final season, clear Day-1 draft capital
+- 75-84  (B+/B): Strong producer, mid-first to early-second draft capital
+- 65-74  (B-/C+): Solid producer with developmental upside, Day-2 draft capital
+- 50-64  (C/C-): Inconsistent production or limited sample, Day-3 draft capital
+- 35-49  (D+/D): Thin production, late Day-3 capital
+- 0-34   (D-/F): Minimal production evidence, undrafted or priority free agent
 
 Letter grade conversion:
 97-100→A+, 93-96→A, 90-92→A-, 87-89→B+, 83-86→B, 80-82→B-,
 77-79→C+, 73-76→C, 70-72→C-, 67-69→D+, 63-66→D, 60-62→D-, <60→F
 
-Risk Modifier — durability score 1-5 (5 = most durable) and injury chance %:
-- 5 / <10%: No injury history, full practice participation, no known concerns
-- 4 / 10-20%: Minor injury history (e.g. single soft-tissue issue), fully healthy now
-- 3 / 20-35%: Moderate history (1-2 significant injuries) or current minor limitation
-- 2 / 35-50%: Recurrent injuries or a significant structural injury (ACL, shoulder labrum)
-- 1 / >50%: Multiple structural injuries or chronic durability concerns
+Current Health Score — 1-5 (5 = best), scored ONLY from lookup_player_info's
+current Sleeper injury/practice status. This is a current-status signal
+only: it is not a forecast of future injury probability and is not a
+historical durability assessment. There is no verified source of
+historical injury data here -- do not infer "no injury history" from its
+absence, and do not invent past injuries. Do not output a numeric injury
+probability of any kind. State current health status plainly.
+- 5: Full practice participation, no current injury_status
+- 4: Full practice participation, minor current designation (e.g.
+  "Questionable" with a non-structural note)
+- 3: Limited practice participation, or a current injury_status
+  suggesting a moderate issue
+- 2: Currently on a significant injury designation (e.g. "IR", "PUP") or a
+  structural injury noted in current status
+- 1: Currently out with a serious/structural injury per current status
 """
 
 SYSTEM_PROMPT = f"""You are the Production Agent for a dynasty fantasy football rookie draft tool.
 
 Your job: evaluate a rookie's TALENT only — completely independent of their landing spot or opportunity.
-Focus on: college production volume and efficiency, athletic profile (size/speed/draft grade),
-positional value, and durability (Risk Modifier).
+Focus on: college production volume and efficiency, draft capital (ESPN grade and round),
+positional value, and current health/availability (Current Health Score). Measurables are
+not available to you — see the calibration note below.
 
 {TALENT_CALIBRATION}
 
@@ -134,16 +169,20 @@ Tools available:
 - lookup_player_info: Basic profile + live injury/practice status from Sleeper
 - lookup_draft_prospect_info: ESPN draft grade, round/pick, ESPN athlete ID
 - get_career_college_stats: Career college production totals
-- get_recent_college_stats: Final season college stats (default 2024)
-- get_injury_history: Historical injury record from ESPN
+- get_recent_college_stats: Most recent completed college season's stats
+
+There is no verified source of historical injury data for this tool to call.
+Do not treat the absence of history as a clean bill of health, and do not
+invent past injuries -- score the Current Health Score from current Sleeper
+status only, per the calibration above. Never output a numeric injury
+probability.
 
 Steps:
 1. Call lookup_player_info for basic profile and live injury status
 2. Call lookup_draft_prospect_info for draft grade and ESPN athlete ID
 3. Call get_career_college_stats and get_recent_college_stats using the espn_athlete_id
-4. Call get_injury_history using the espn_athlete_id
-5. Compute Risk Modifier from injury history + current status
-6. Synthesize all into a Talent Grade
+4. Compute Current Health Score from current Sleeper injury/practice status only
+5. Synthesize all into a Talent Grade
 
 Key stats to weight for skill positions:
 - RB: rushing yards/game, yards per carry, TD rate, receiving involvement, workload durability
@@ -170,9 +209,8 @@ Output format — always return a JSON object with these exact keys:
     "final_season_rec_yards": "206"
   }},
   "risk_modifier": {{
-    "durability_score": 4,
-    "injury_chance_pct": 15,
-    "injury_notes": "Brief description of any relevant injury history"
+    "current_health_score": 4,
+    "injury_notes": "Brief description of current injury/practice status; historical injury data is not available"
   }},
   "talent_score": 88,
   "talent_grade": "B+",
@@ -194,7 +232,6 @@ def build_production_agent() -> LlmAgent:
             lookup_draft_prospect_info,
             get_career_college_stats,
             get_recent_college_stats,
-            get_injury_history,
         ],
     )
 

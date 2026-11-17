@@ -5,19 +5,21 @@ Exposes the dynasty rookie scouting capabilities over the Model Context Protocol
 any MCP client (Claude Desktop, etc.) can use them. Two layers:
 
   • Granular data tools  — search prospects, opportunity, draft capital, veteran
-    competition quality, dynasty value, college production, injury history.
+    competition quality, dynasty value, college production.
   • High-level pipeline  — scout_rookie() runs the full 3-agent evaluation and
     returns the structured draft recommendation.
 
-Run (stdio transport):
-    python mcp_server.py
+Run (stdio transport), in the locked project environment:
+    uv run --locked python mcp_server.py
 
-Claude Desktop config (claude_desktop_config.json):
+Claude Desktop config (claude_desktop_config.json); replace the directory
+with your scoutcap checkout:
     {
       "mcpServers": {
         "rookie-scout": {
-          "command": "D:\\\\venvs\\\\kaggleproj312\\\\Scripts\\\\python.exe",
-          "args": ["C:\\\\Users\\\\myfit\\\\OneDrive\\\\Documents\\\\KaggleProj\\\\mcp_server.py"]
+          "command": "uv",
+          "args": ["run", "--locked", "--directory", "C:\\\\path\\\\to\\\\scoutcap",
+                   "python", "mcp_server.py"]
         }
       }
     }
@@ -35,6 +37,7 @@ from mcp.server.fastmcp import FastMCP
 # Reuse the existing tool layer — no logic duplicated.
 from tools.sleeper import search_players, get_trending, get_nfl_players
 from tools.espn import search_draft_prospects
+from config.league import DRAFT_CLASS_YEAR
 from tools.fantasycalc import get_player_value, value_grade
 from agents.situation_agent import (
     lookup_player_opportunity,
@@ -44,7 +47,6 @@ from agents.situation_agent import (
 from agents.production_agent import (
     lookup_draft_prospect_info,
     get_career_college_stats,
-    get_injury_history,
 )
 from agents.synthesis_agent import run_synthesis_agent
 
@@ -66,9 +68,9 @@ def _best_match(name: str) -> dict | None:
 
 @mcp.tool()
 def search_prospects(name: str) -> list:
-    """Search the 2026 NFL draft class (ESPN) by name. Returns matching prospects
+    """Search the configured NFL draft class (ESPN) by name. Returns matching prospects
     with draft capital, ESPN scout grade, and ESPN ranks."""
-    return search_draft_prospects(name, season=2026)
+    return search_draft_prospects(name, season=DRAFT_CLASS_YEAR)
 
 
 @mcp.tool()
@@ -127,14 +129,14 @@ def college_production(name: str) -> dict:
     return get_career_college_stats(aid)
 
 
-@mcp.tool()
-def injury_history(name: str) -> dict:
-    """Historical injury records for a draft prospect (ESPN)."""
-    prospect = lookup_draft_prospect_info(name)
-    aid = prospect.get("espn_athlete_id")
-    if not aid:
-        return {"error": f"Could not resolve ESPN athlete ID for '{name}'", "prospect": prospect}
-    return get_injury_history(aid)
+# injury_history (removed) called agents.production_agent.get_injury_history,
+# which delegated to an ESPN endpoint confirmed to 404 for every real athlete
+# id tested, including currently injured players -- it was silently
+# converting "provider failed" into "no injury history found." Removed
+# alongside the same fix in production_agent.py rather than leaving this
+# MCP tool exposing the same false signal directly to any client. See
+# agents/production_agent.py's own comment at the same spot for the full
+# writeup.
 
 
 @mcp.tool()
