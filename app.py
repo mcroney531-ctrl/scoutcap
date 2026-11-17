@@ -854,9 +854,27 @@ def _get_adp_ranking(rookies: list) -> list:
 
 
 # League geometry comes from config/league.py (LEAGUE) — the board, labels,
-# snake math and draft completion all read it rather than re-encoding 4 × 12.
-# The draft order is snake (forward odd rounds, reverse even rounds); that
-# model predates D1/D3 and is unchanged here.
+# pick math and draft completion all read it rather than re-encoding 4 × 12.
+#
+# The draft ORDER is not assumed. Sleeper says which order the league's draft
+# uses (Dynasty Daddies' rookie drafts are linear: every round runs 1 → 12),
+# and _load_draft_meta reads it. Every pick-number function takes the order
+# explicitly; there is no default to fall back on. Only these two are
+# modelled; anything else (auction, snake with a third-round reversal) is
+# reported as unsupported rather than approximated.
+SUPPORTED_DRAFT_ORDERS = ("linear", "snake")
+
+
+def _overall_pick(rnd: int, slot: int, order: str, teams: int | None = None) -> int:
+    """Overall pick number for a slot in a round. linear: every round runs
+    1 → teams. snake: odd rounds forward, even rounds reversed."""
+    teams = teams or LEAGUE["picks_per_round"]
+    if order not in SUPPORTED_DRAFT_ORDERS:
+        raise ValueError(f"unsupported draft order {order!r}")
+    r_idx = rnd - 1
+    if order == "snake" and r_idx % 2 == 1:
+        return r_idx * teams + (teams - slot + 1)
+    return r_idx * teams + slot
 
 def _pick_label(overall: int, teams: int | None = None) -> str:
     teams = teams or LEAGUE["picks_per_round"]
@@ -865,14 +883,10 @@ def _pick_label(overall: int, teams: int | None = None) -> str:
     return f"{r}.{p:02d}"
 
 
-def _user_picks_for_slot(slot: int, rounds: int | None = None, teams: int | None = None) -> list:
-    """Overall pick numbers for a given draft slot (snake draft)."""
+def _user_picks_for_slot(slot: int, order: str, rounds: int | None = None, teams: int | None = None) -> list:
+    """Overall pick numbers a draft slot owns in every round, for the given order."""
     rounds = rounds or LEAGUE["rounds"]
-    teams = teams or LEAGUE["picks_per_round"]
-    picks = []
-    for r in range(rounds):
-        picks.append(r * teams + slot if r % 2 == 0 else r * teams + (teams - slot + 1))
-    return picks
+    return [_overall_pick(r, slot, order, teams) for r in range(1, rounds + 1)]
 
 
 def _default_acquired_slot(teams: int | None = None) -> int:
@@ -908,14 +922,128 @@ def _arsenal_loaded(arsenal) -> bool:
     return isinstance(arsenal, dict) and isinstance(arsenal.get("picks"), list)
 
 
-def _resolve_user_picks(arsenal, slot: int, acquired_slots: dict) -> set:
-    """The user's picks for a draft:
-      not loaded            -> natural snake picks for the slot
+def _resolve_user_picks(arsenal, slot: int, acquired_slots: dict, order: str) -> set:
+    """The user's picks for a draft in the given order:
+      not loaded            -> the slot's natural pick in every round
       loaded, with picks    -> exactly those picks
       loaded, with no picks -> no picks (the user owns none in this draft)"""
     if not _arsenal_loaded(arsenal):
-        return set(_user_picks_for_slot(slot))
-    return _arsenal_to_picks_set(arsenal["picks"], slot, acquired_slots)
+        return set(_user_picks_for_slot(slot, order))
+    return _arsenal_to_picks_set(arsenal["picks"], slot, acquired_slots, order)
+
+
+def _select_draft(drafts, season, rounds: int | None = None, teams: int | None = None):
+    """The one Sleeper draft this Mock Draft models: the given season, with the
+    configured rounds x teams. A season can also hold a startup draft (2023
+    has a 26-round snake one), so geometry matters. Returns (draft, problem)."""
+    rounds = rounds or LEAGUE["rounds"]
+    teams = teams or LEAGUE["picks_per_round"]
+    matches = [d for d in (drafts or [])
+               if str(d.get("season")) == str(season)
+               and (d.get("settings") or {}).get("rounds") == rounds
+               and (d.get("settings") or {}).get("teams") == teams]
+    if not matches:
+        return None, (f"Sleeper has no {season} draft with {rounds} rounds × {teams} teams for this "
+                      f"league yet, so its draft order isn't known.")
+    if len(matches) > 1:
+        return None, (f"Sleeper lists {len(matches)} {season} drafts with {rounds} rounds × {teams} teams; "
+                      f"Scout can't tell which one this Mock Draft should follow.")
+    return matches[0], None
+
+
+def _draft_order_type(draft) -> tuple:
+    """(order, problem): 'linear' or 'snake' from a Sleeper draft, or None and
+    why not. Variants Scout doesn't model are reported, never approximated."""
+    kind = (draft or {}).get("type")
+    reversal = ((draft or {}).get("settings") or {}).get("reversal_round") or 0
+    if kind == "linear":
+        return "linear", None
+    if kind == "snake" and not reversal:
+        return "snake", None
+    if kind == "snake":
+        return None, (f"Sleeper reports a snake draft that reverses again from round {reversal} "
+                      f"(a third-round-reversal variant). Scout's Mock Draft only models plain linear "
+                      f"and snake orders.")
+    return None, (f"Sleeper reports a {kind or 'unknown'} draft. Scout's Mock Draft only models "
+                  f"linear and snake orders.")
+
+
+def _verified_slots(draft, rosters, teams: int | None = None):
+    """{roster_id: slot} from the draft's own slot data, or None unless it
+    covers every roster exactly once with slots 1..teams."""
+    teams = teams or LEAGUE["picks_per_round"]
+    roster_ids = {r.get("roster_id") for r in (rosters or [])}
+    mapping = {}
+    s2r = (draft or {}).get("slot_to_roster_id") or {}
+    order = (draft or {}).get("draft_order") or {}
+    if s2r:
+        for slot, rid in s2r.items():
+            mapping[rid] = int(slot)
+    elif order:
+        owner_to_rid = {r.get("owner_id"): r.get("roster_id") for r in (rosters or [])}
+        for user_id, slot in order.items():
+            mapping[owner_to_rid.get(user_id)] = slot
+    else:
+        return None
+    slots = list(mapping.values())
+    if (set(mapping) != roster_ids or len(mapping) != teams or None in mapping
+            or sorted(slots) != list(range(1, teams + 1))):
+        return None
+    return mapping
+
+
+def _slot_status(current: int, verified) -> str:
+    """verified: the Sleeper slot is in use. override: a what-if change to a
+    verified slot. assumed: no verified slot exists; the value is the user's."""
+    if verified is None:
+        return "assumed"
+    return "verified" if current == verified else "override"
+
+
+def _slot_status_text(current: int, verified) -> str:
+    status = _slot_status(current, verified)
+    if status == "verified":
+        return "✓ Sleeper draft order"
+    if status == "override":
+        return f"✎ What-if — Sleeper has slot {verified}"
+    return "Assumed — no Sleeper slot available"
+
+
+def _load_draft_meta(season=None) -> dict:
+    """Draft order and slot assignments for the configured draft class, as two
+    independent pieces of evidence from Sleeper:
+      order / order_problem / order_unsupported   the draft's type
+      slots / slots_problem / my_rid             {roster_id: slot}, and the user's roster
+      draft_status                               e.g. 'complete'
+    Provider errors raise (the caller shows a safe message)."""
+    season = DRAFT_CLASS_YEAR if season is None else season
+    meta = {"order": None, "order_problem": None, "order_unsupported": False,
+            "draft_status": None, "slots": None, "slots_problem": None, "my_rid": None}
+    league_id = (os.getenv("SLEEPER_LEAGUE_ID") or "").strip()
+    username = (os.getenv("SLEEPER_USERNAME") or "").strip()
+    if not league_id:
+        meta["order_problem"] = "SLEEPER_LEAGUE_ID isn't set, so the league's draft order can't be read."
+        meta["slots_problem"] = meta["order_problem"]
+        return meta
+
+    draft, problem = _select_draft(get_league_drafts(league_id), season)
+    if draft is None:
+        meta["order_problem"] = meta["slots_problem"] = problem
+        return meta
+    meta["draft_status"] = draft.get("status")
+    meta["order"], meta["order_problem"] = _draft_order_type(draft)
+    meta["order_unsupported"] = meta["order"] is None
+
+    rosters = get_rosters(league_id)
+    meta["slots"] = _verified_slots(draft, rosters)
+    if meta["slots"] is None:
+        meta["slots_problem"] = f"Sleeper hasn't published a complete {season} draft order yet."
+    if username:
+        user = get_user(username)
+        if isinstance(user, dict) and user.get("user_id"):
+            mine = next((r for r in rosters or [] if r.get("owner_id") == user["user_id"]), None)
+            meta["my_rid"] = mine.get("roster_id") if mine else None
+    return meta
 
 
 def _load_pick_arsenal(season=None) -> dict:
@@ -994,11 +1122,14 @@ def _load_pick_arsenal(season=None) -> dict:
     return {"my_rid": my_rid, "picks": picks}
 
 
-def _arsenal_to_picks_set(arsenal: list, my_slot: int, acquired_slots: dict,
+def _arsenal_to_picks_set(arsenal: list, my_slot: int, acquired_slots: dict, order: str,
                            rounds: int | None = None, teams: int | None = None) -> set:
-    """Convert arsenal pick list to a set of overall pick numbers.
-    own picks use my_slot; acquired picks use acquired_slots[round_orig_key] or mid-round."""
+    """Convert arsenal pick list to a set of overall pick numbers in the given
+    order. Own picks use my_slot; an acquired pick uses its original team's
+    slot from acquired_slots[round_origrid], or a mid-round estimate."""
     teams = teams or LEAGUE["picks_per_round"]
+    if order not in SUPPORTED_DRAFT_ORDERS:
+        raise ValueError(f"unsupported draft order {order!r}")
     result = set()
     for p in arsenal:
         rnd = p["round"]
@@ -1007,18 +1138,14 @@ def _arsenal_to_picks_set(arsenal: list, my_slot: int, acquired_slots: dict,
         else:
             key = f"{rnd}_{p['orig_rid']}"
             slot = _clamp_slot(acquired_slots.get(key, _default_acquired_slot(teams)), teams)
-        # Snake draft formula (even round index = forward, odd = reverse)
-        r_idx = rnd - 1
-        overall = r_idx * teams + slot if r_idx % 2 == 0 else r_idx * teams + (teams - slot + 1)
-        result.add(overall)
+        result.add(_overall_pick(rnd, slot, order, teams))
     return result
 
 
-def _start_draft(slot: int, pins: dict, variance: int, rookies: list,
-                 custom_picks_set: set | None = None):
-    """Initialize interactive draft state. Called once when user clicks Start Draft."""
+def _start_draft(pins: dict, variance: int, rookies: list, user_picks_set: set):
+    """Initialize interactive draft state. Called once when user clicks Start
+    Draft, with the user's picks already resolved for the chosen order."""
     adp = _get_adp_ranking(rookies)
-    user_picks_set = custom_picks_set if custom_picks_set is not None else set(_user_picks_for_slot(slot))
     pinned_ids = {str(v) for v in pins.values()}
 
     # Resolve pins to player dicts
@@ -1144,6 +1271,20 @@ def render_mock_draft(rookies: list):
         arsenal = st.session_state.mock_arsenal
         using_real_picks = _arsenal_loaded(arsenal)
 
+        # Draft order and slots come from Sleeper, once per session. They are
+        # independent: either can be verified while the other is unknown.
+        meta = st.session_state.mock_draft_meta
+        if meta is None:
+            try:
+                meta = _load_draft_meta()
+            except Exception as exc:  # noqa: BLE001 — provider failure: show a safe message
+                print(f"draft order load failed: {type(exc).__name__}", file=sys.stderr)
+                failed = "Couldn’t read the draft order from Sleeper."
+                meta = {"order": None, "order_problem": failed, "order_unsupported": False,
+                        "draft_status": None, "slots": None, "slots_problem": failed, "my_rid": None}
+            st.session_state.mock_draft_meta = meta
+        verified_slots = meta["slots"] or {}
+
         with st.container(border=True):
             load_col, clear_col = st.columns([3, 1])
             with load_col:
@@ -1191,13 +1332,15 @@ def render_mock_draft(rookies: list):
                         with row_b:
                             if p["source"] == "acquired":
                                 key = f"{p['round']}_{p['orig_rid']}"
+                                verified_acq = verified_slots.get(p["orig_rid"])
                                 cur = _clamp_slot(st.session_state.mock_acquired_slots.get(
-                                    key, _default_acquired_slot()))
+                                    key, verified_acq or _default_acquired_slot()))
                                 slot_val = st.selectbox(
                                     "Est. slot", list(range(1, LEAGUE["picks_per_round"] + 1)), index=cur - 1,
                                     key=f"acq_slot_{key}", label_visibility="collapsed",
                                 )
                                 st.session_state.mock_acquired_slots[key] = slot_val
+                                st.caption(_slot_status_text(slot_val, verified_acq))
 
                 own_rounds  = {p["round"] for p in picks if p["source"] == "own"}
                 all_rounds  = set(range(1, LEAGUE["rounds"] + 1))
@@ -1205,16 +1348,41 @@ def render_mock_draft(rookies: list):
                 if missing:
                     st.caption(f"❌ No pick in round(s): {', '.join(str(r) for r in missing)} (traded away)")
 
+        # ── Draft order ───────────────────────────────────────────────────────
+        if meta["order"]:
+            order = meta["order"]
+            st.caption(f"Draft order: **{order.title()}** · verified from Sleeper")
+        elif meta["order_unsupported"]:
+            order = None
+            st.error(meta["order_problem"])
+        else:
+            st.caption(meta["order_problem"])
+            choice = st.selectbox(
+                "Draft order — not confirmed by Sleeper, your assumption",
+                ["Linear", "Snake"], index=None, placeholder="Choose the draft order…",
+                key="mock_order_assumed",
+            )
+            order = choice.lower() if choice else None
+            if st.button("↻ Retry Sleeper", key="retry_draft_meta"):
+                st.session_state.mock_draft_meta = None
+                st.rerun()
+        if meta.get("draft_status") == "complete":
+            st.caption(f"The {DRAFT_CLASS_YEAR} draft is complete in Sleeper; this mock is a what-if "
+                       f"replay, not the real results.")
+
         # ── Slot + variance ───────────────────────────────────────────────────
+        my_rid = arsenal["my_rid"] if using_real_picks else meta.get("my_rid")
+        verified_own = verified_slots.get(my_rid) if my_rid is not None else None
         s1, s2, s3 = st.columns([2, 3, 3])
         with s1:
             slot = st.selectbox(
                 "Your slot" if not using_real_picks else "Your slot (own picks)",
                 list(range(1, LEAGUE["picks_per_round"] + 1)),
-                index=_clamp_slot(st.session_state.mock_slot) - 1, key="mock_slot_sel",
+                index=_clamp_slot(verified_own or st.session_state.mock_slot) - 1, key="mock_slot_sel",
                 help="Your natural draft position — applies to picks you originally own",
             )
             st.session_state.mock_slot = slot
+            st.caption(_slot_status_text(slot, verified_own))
         with s2:
             variance = st.slider(
                 "Variance", 0, 5, st.session_state.mock_variance, key="mock_var_slider",
@@ -1222,8 +1390,11 @@ def render_mock_draft(rookies: list):
             )
             st.session_state.mock_variance = variance
         with s3:
-            your_picks = _resolve_user_picks(arsenal, slot, st.session_state.mock_acquired_slots)
-            labels = "  ·  ".join(_pick_label(p) for p in sorted(your_picks)) or "No picks"
+            if order:
+                your_picks = _resolve_user_picks(arsenal, slot, st.session_state.mock_acquired_slots, order)
+                labels = "  ·  ".join(_pick_label(p) for p in sorted(your_picks)) or "No picks"
+            else:
+                labels = "Choose a draft order"
             st.metric("Your picks", labels)
 
         pin_count = len(st.session_state.mock_pins)
@@ -1249,19 +1420,19 @@ def render_mock_draft(rookies: list):
                         st.session_state.mock_pins[int(pin_pick_num)] = match["player_id"]
                         st.rerun()
 
-        if st.button("▶ Start Draft", type="primary", use_container_width=True, key="start_draft_btn"):
-            # A loaded arsenal (even an empty one) is authoritative; only "not
-            # loaded" falls back to the natural slot picks inside _start_draft.
-            custom_set = None
-            if using_real_picks:
-                custom_set = _resolve_user_picks(
-                    st.session_state.mock_arsenal,
-                    st.session_state.mock_slot,
-                    st.session_state.mock_acquired_slots,
-                )
-            _start_draft(st.session_state.mock_slot, st.session_state.mock_pins,
-                         st.session_state.mock_variance, rookies,
-                         custom_picks_set=custom_set)
+        if st.button("▶ Start Draft", type="primary", use_container_width=True, key="start_draft_btn",
+                     disabled=order is None):
+            # A loaded arsenal (even an empty one) is authoritative; "not
+            # loaded" uses the slot's natural picks. Either way the set is
+            # resolved here, in the chosen order, and frozen for the draft:
+            # setup inputs aren't shown again until Restart.
+            user_picks = _resolve_user_picks(
+                st.session_state.mock_arsenal if using_real_picks else None,
+                st.session_state.mock_slot,
+                st.session_state.mock_acquired_slots,
+                order,
+            )
+            _start_draft(st.session_state.mock_pins, st.session_state.mock_variance, rookies, user_picks)
             st.rerun()
         return
 
@@ -1424,7 +1595,7 @@ def render_mock_draft(rookies: list):
 # ─────────────────────────────────────────────────────────────────────────────
 
 from tools.sleeper import (
-    get_nfl_players, get_user, get_rosters, get_users_in_league, get_traded_picks,
+    get_nfl_players, get_user, get_rosters, get_users_in_league, get_traded_picks, get_league_drafts,
 )
 from agents.synthesis_agent import run_synthesis_agent
 
@@ -1462,6 +1633,8 @@ if "mock_arsenal" not in st.session_state:
     st.session_state.mock_arsenal = None   # None = not loaded yet
 if "mock_arsenal_error" not in st.session_state:
     st.session_state.mock_arsenal_error = None   # last load failure, shown until retried/cleared
+if "mock_draft_meta" not in st.session_state:
+    st.session_state.mock_draft_meta = None    # draft order + slots from Sleeper, once per session
 if "mock_acquired_slots" not in st.session_state:
     st.session_state.mock_acquired_slots = {}  # {f"{round}_{orig_rid}": slot}
 
