@@ -239,10 +239,13 @@ class FacadeAndSourceBoundaryTest(unittest.TestCase):
         self.assertIn("get_traded_picks", facade.__all__)
 
     def test_no_direct_sleeper_http_in_production_scout_source(self):
-        skip = {"tests", "dynasty_core", "__pycache__", ".git"}
+        # Scout's own source only. The uv environment lives in the repo at
+        # .venv/, so hidden directories (.venv, .git, .claude) and any
+        # site-packages are third-party code, not Scout source.
+        skip = {"tests", "dynasty_core", "__pycache__", "site-packages"}
         for path in ROOT.rglob("*.py"):
             rel = path.relative_to(ROOT)
-            if skip & set(rel.parts):
+            if skip & set(rel.parts) or any(part.startswith(".") for part in rel.parts):
                 continue
             with self.subTest(str(rel)):
                 self.assertNotIn("api.sleeper.app", path.read_text(encoding="utf-8"))
